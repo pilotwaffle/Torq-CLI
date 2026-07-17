@@ -220,7 +220,17 @@ export default function App() {
   return (
     <div className="flex h-screen w-full bg-dark-bg text-gray-200 overflow-hidden" id="app-root">
       {/* 1. Sidebar - Model Labor Pool */}
-      <ModelPoolPanel models={models} onUpdateModels={setModels} />
+      <ModelPoolPanel
+        models={models}
+        onUpdateModels={setModels}
+        onTriggerRun={handleTriggerRun}
+        forceSimulate={forceSimulate}
+        onToggleForceSimulate={setForceSimulate}
+        onClearRun={handleClearRun}
+        historyCount={history.length}
+        isRunning={isRunning}
+        hasApiKey={liveConfig.hasApiKey}
+      />
 
       {/* 2. Main content block */}
       <main className="flex-1 flex flex-col h-full overflow-hidden" id="main-workspace">

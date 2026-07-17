@@ -1,0 +1,6 @@
+{
+  "name": "Labor Pool Manager",
+  "description": "A dashboard to manage model instances and run them through a 5-stage pipeline, strictly preventing the generating model from reviewing its own output.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -392,6 +392,9 @@ def test_hash_pinned_text_checkout_policy_is_exact() -> None:
         "src/torq_cli/data/**/*.yaml text eol=lf",
         "src/torq_cli/data/**/*.json text eol=lf",
         "src/torq_cli/data/**/*.md text eol=lf",
+        "# T06C fixture and provenance are hash-pinned LF evidence.",
+        "tests/fixtures/t06c/raw-console-config.sanitized.yaml text eol=lf",
+        "tests/fixtures/t06c/raw-console-config.provenance.json text eol=lf",
     ]
 
 

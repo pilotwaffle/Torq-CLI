@@ -8,15 +8,41 @@ jobs:
   quality-windows-py311:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
+      - uses: actions/checkout@v4
+      - name: Assert LF fixture and provenance bytes
+        shell: python
+        run: |
+          import hashlib
+          import json
+          import pathlib
+          raw = pathlib.Path('tests/fixtures/t06c/raw-console-config.sanitized.yaml').read_bytes()
+          provenance = pathlib.Path('tests/fixtures/t06c/raw-console-config.provenance.json').read_bytes()
+          meta = json.loads(provenance.decode('utf-8'))
+          assert bytes([13]) not in raw and bytes([13]) not in provenance
+          assert hashlib.sha256(raw).hexdigest() == meta['sanitized_fixture_sha256']
+          assert len(raw) == meta['byte_count']
+          assert meta['encoding'] == 'UTF-8' and meta['bom'] is False and meta['line_endings'] == 'LF'
       - name: Bootstrap development tools (network phase)
         run: python -m pip install --disable-pip-version-check --no-input build pytest ruff mypy types-PyYAML
       - name: Assert runner identity
         run: python -c "import platform,sys; assert sys.platform == 'win32' and platform.machine() in ('AMD64','x86_64') and sys.implementation.name == 'cpython' and sys.version_info[:2] == (3,11)"
       - name: Provision audited wheelhouse (network phase)
         run: python scripts/provision_ci_wheelhouse.py --root "$env:RUNNER_TEMP\t06c-wheelhouse" --platform windows-py311 --lock ci/t06c-wheelhouse/requirements-py311.txt --manifest ci/t06c-wheelhouse/manifest-py311.json
+      - name: Install audited runtime dependencies (offline)
+        env:
+          PIP_NO_INDEX: "1"
+          PIP_NO_INPUT: "1"
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+          PYTHONNOUSERSITE: "1"
+        run: |
+          $wheelhouse = "$env:RUNNER_TEMP\t06c-wheelhouse"
+          $runtime_cache = "$env:RUNNER_TEMP\t06c-runtime-cache"
+          $env:PIP_FIND_LINKS = $wheelhouse
+          $env:PIP_CACHE_DIR = $runtime_cache
+          python -m pip install --no-index --no-deps --only-binary=:all: --require-hashes --force-reinstall --find-links "$wheelhouse" --cache-dir "$runtime_cache" --no-input --disable-pip-version-check -r ci/t06c-wheelhouse/requirements-py311.txt
+          python -c "import yaml; assert yaml.__version__ == '6.0.2'"
       - name: Quality checks
         env: {PYTHONPATH: src}
         run: |
@@ -44,15 +70,40 @@ jobs:
   quality-macos-py311:
     runs-on: macos-15-intel
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
+      - uses: actions/checkout@v4
+      - name: Assert LF fixture and provenance bytes
+        shell: python
+        run: |
+          import hashlib
+          import json
+          import pathlib
+          raw = pathlib.Path('tests/fixtures/t06c/raw-console-config.sanitized.yaml').read_bytes()
+          provenance = pathlib.Path('tests/fixtures/t06c/raw-console-config.provenance.json').read_bytes()
+          meta = json.loads(provenance.decode('utf-8'))
+          assert bytes([13]) not in raw and bytes([13]) not in provenance
+          assert hashlib.sha256(raw).hexdigest() == meta['sanitized_fixture_sha256']
+          assert len(raw) == meta['byte_count']
+          assert meta['encoding'] == 'UTF-8' and meta['bom'] is False and meta['line_endings'] == 'LF'
       - name: Bootstrap development tools (network phase)
         run: python -m pip install --disable-pip-version-check --no-input build pytest ruff mypy types-PyYAML
       - name: Assert exact Intel macOS runner identity before download
         run: python -c "import platform,sys; assert sys.platform == 'darwin' and platform.machine() == 'x86_64' and sys.implementation.name == 'cpython' and sys.version_info[:2] == (3,11)"
       - name: Provision audited wheelhouse (network phase)
         run: python scripts/provision_ci_wheelhouse.py --root "$RUNNER_TEMP/t06c-wheelhouse" --platform macos-py311 --lock ci/t06c-wheelhouse/requirements-py311.txt --manifest ci/t06c-wheelhouse/manifest-py311.json
+      - name: Install audited runtime dependencies (offline)
+        env:
+          PIP_NO_INDEX: "1"
+          PIP_NO_INPUT: "1"
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+          PYTHONNOUSERSITE: "1"
+        run: |
+          wheelhouse="$RUNNER_TEMP/t06c-wheelhouse"
+          runtime_cache="$RUNNER_TEMP/t06c-runtime-cache"
+          export PIP_FIND_LINKS="$wheelhouse" PIP_CACHE_DIR="$runtime_cache"
+          python -m pip install --no-index --no-deps --only-binary=:all: --require-hashes --force-reinstall --find-links "$wheelhouse" --cache-dir "$runtime_cache" --no-input --disable-pip-version-check -r ci/t06c-wheelhouse/requirements-py311.txt
+          python -c "import yaml; assert yaml.__version__ == '6.0.2'"
       - name: Quality checks
         env: {PYTHONPATH: src}
         run: |
@@ -73,15 +124,40 @@ jobs:
   quality-linux-py311:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
+      - uses: actions/checkout@v4
+      - name: Assert LF fixture and provenance bytes
+        shell: python
+        run: |
+          import hashlib
+          import json
+          import pathlib
+          raw = pathlib.Path('tests/fixtures/t06c/raw-console-config.sanitized.yaml').read_bytes()
+          provenance = pathlib.Path('tests/fixtures/t06c/raw-console-config.provenance.json').read_bytes()
+          meta = json.loads(provenance.decode('utf-8'))
+          assert bytes([13]) not in raw and bytes([13]) not in provenance
+          assert hashlib.sha256(raw).hexdigest() == meta['sanitized_fixture_sha256']
+          assert len(raw) == meta['byte_count']
+          assert meta['encoding'] == 'UTF-8' and meta['bom'] is False and meta['line_endings'] == 'LF'
       - name: Bootstrap development tools (network phase)
         run: python -m pip install --disable-pip-version-check --no-input build pytest ruff mypy types-PyYAML
       - name: Assert runner identity
         run: python -c "import platform,sys; assert sys.platform == 'linux' and platform.machine() == 'x86_64' and sys.implementation.name == 'cpython' and sys.version_info[:2] == (3,11)"
       - name: Provision audited wheelhouse (network phase)
         run: python scripts/provision_ci_wheelhouse.py --root "$RUNNER_TEMP/t06c-wheelhouse" --platform linux-py311 --lock ci/t06c-wheelhouse/requirements-py311.txt --manifest ci/t06c-wheelhouse/manifest-py311.json
+      - name: Install audited runtime dependencies (offline)
+        env:
+          PIP_NO_INDEX: "1"
+          PIP_NO_INPUT: "1"
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+          PYTHONNOUSERSITE: "1"
+        run: |
+          wheelhouse="$RUNNER_TEMP/t06c-wheelhouse"
+          runtime_cache="$RUNNER_TEMP/t06c-runtime-cache"
+          export PIP_FIND_LINKS="$wheelhouse" PIP_CACHE_DIR="$runtime_cache"
+          python -m pip install --no-index --no-deps --only-binary=:all: --require-hashes --force-reinstall --find-links "$wheelhouse" --cache-dir "$runtime_cache" --no-input --disable-pip-version-check -r ci/t06c-wheelhouse/requirements-py311.txt
+          python -c "import yaml; assert yaml.__version__ == '6.0.2'"
       - name: Quality checks
         env: {PYTHONPATH: src}
         run: |
@@ -103,15 +179,40 @@ jobs:
     runs-on: ubuntu-22.04
     env: {TORQ_T06C_HEADLESS: "1"}
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
+      - uses: actions/checkout@v4
+      - name: Assert LF fixture and provenance bytes
+        shell: python
+        run: |
+          import hashlib
+          import json
+          import pathlib
+          raw = pathlib.Path('tests/fixtures/t06c/raw-console-config.sanitized.yaml').read_bytes()
+          provenance = pathlib.Path('tests/fixtures/t06c/raw-console-config.provenance.json').read_bytes()
+          meta = json.loads(provenance.decode('utf-8'))
+          assert bytes([13]) not in raw and bytes([13]) not in provenance
+          assert hashlib.sha256(raw).hexdigest() == meta['sanitized_fixture_sha256']
+          assert len(raw) == meta['byte_count']
+          assert meta['encoding'] == 'UTF-8' and meta['bom'] is False and meta['line_endings'] == 'LF'
       - name: Bootstrap development tools (network phase)
         run: python -m pip install --disable-pip-version-check --no-input build pytest ruff mypy types-PyYAML
       - name: Assert runner identity
         run: python -c "import platform,sys; assert sys.platform == 'linux' and platform.machine() == 'x86_64' and sys.implementation.name == 'cpython' and sys.version_info[:2] == (3,11)"
       - name: Provision audited wheelhouse (network phase)
         run: python scripts/provision_ci_wheelhouse.py --root "$RUNNER_TEMP/t06c-wheelhouse" --platform linux-py311 --lock ci/t06c-wheelhouse/requirements-py311.txt --manifest ci/t06c-wheelhouse/manifest-py311.json
+      - name: Install audited runtime dependencies (offline)
+        env:
+          PIP_NO_INDEX: "1"
+          PIP_NO_INPUT: "1"
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+          PYTHONNOUSERSITE: "1"
+        run: |
+          wheelhouse="$RUNNER_TEMP/t06c-wheelhouse"
+          runtime_cache="$RUNNER_TEMP/t06c-runtime-cache"
+          export PIP_FIND_LINKS="$wheelhouse" PIP_CACHE_DIR="$runtime_cache"
+          python -m pip install --no-index --no-deps --only-binary=:all: --require-hashes --force-reinstall --find-links "$wheelhouse" --cache-dir "$runtime_cache" --no-input --disable-pip-version-check -r ci/t06c-wheelhouse/requirements-py311.txt
+          python -c "import yaml; assert yaml.__version__ == '6.0.2'"
       - name: Headless offline quality and smoke proof
         env: {PYTHONPATH: src}
         run: |

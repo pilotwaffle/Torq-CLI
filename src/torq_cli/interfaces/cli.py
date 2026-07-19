@@ -8,6 +8,7 @@ import sys
 from typing import Any, Sequence
 
 from torq_cli.application import import_v5_config
+from torq_cli.application import import_v5_console_config
 from torq_cli.application.resolve import envelope_to_dict, resolve_path
 from torq_cli.domain.models import ResultEnvelope
 
@@ -70,20 +71,34 @@ def _parser() -> argparse.ArgumentParser:
     config_sub = config.add_subparsers(dest="config_command", required=True)
     import_v5 = config_sub.add_parser("import-v5-normalized")
     import_v5.add_argument("--config", required=True)
+    import_console = config_sub.add_parser("import-v5-console")
+    import_console.add_argument("--config", required=True)
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     supplied = list(argv) if argv is not None else sys.argv[1:]
     if any(argument == "--output" or argument.startswith("--output=") for argument in supplied):
+        if "import-v5-console" in supplied:
+            envelope = import_v5_console_config.output_rejected()
+            return 5 if _print_envelope(envelope, compact=True) else 2
         envelope = import_v5_config.output_rejected()
         return 5 if _print_envelope(envelope, compact=True) else 2
     args = _parser().parse_args(argv)
     if args.command == "config":
         try:
-            envelope = import_v5_config.import_v5_path(args.config)
+            importer = (
+                import_v5_console_config
+                if args.config_command == "import-v5-console"
+                else import_v5_config
+            )
+            envelope = importer.import_v5_path(args.config)
         except Exception:
-            envelope = import_v5_config.internal_error()
+            envelope = (
+                import_v5_console_config.internal_error()
+                if args.config_command == "import-v5-console"
+                else import_v5_config.internal_error()
+            )
         rendering_failed = _print_envelope(envelope, compact=True)
         if rendering_failed:
             return 5

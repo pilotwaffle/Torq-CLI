@@ -109,6 +109,13 @@ CATALOG: dict[str, _FindingSpec] = {
     "legacy_config_role_missing": _spec("Normalized legacy config has missing or unknown roles.", *_HIGH_INVALID, "legacy_config_validate"),
     "legacy_config_mapping_unsupported": _spec("Normalized legacy config does not match the authenticated compatibility reference.", *_HIGH_INVALID, "legacy_config_map"),
     "legacy_config_projection_invalid": _spec("Canonical target config cannot satisfy the closed CLI config contract.", *_HIGH_INVALID, "legacy_config_project"),
+    "console_config_unreadable": _spec("Console config cannot be read.", *_HIGH_INVALID, "console_config_read"),
+    "console_config_protected_path_denied": _spec("Console config path access is denied.", FindingSeverity.CRITICAL, "A", "blocked", "console_config_read", 3),
+    "console_config_syntax_invalid": _spec("Console config syntax is invalid.", *_HIGH_INVALID, "console_config_parse"),
+    "console_config_schema_invalid": _spec("Console config violates its closed compatibility schema.", *_HIGH_INVALID, "console_config_validate"),
+    "console_config_secret_field_forbidden": _spec("Raw credential field is forbidden in Console config.", FindingSeverity.CRITICAL, "A", "invalid", "console_config_validate", 2),
+    "console_config_mapping_unsupported": _spec("Console config does not match the pinned compatibility mapping.", *_HIGH_INVALID, "console_config_map"),
+    "console_config_projection_invalid": _spec("Canonical target config cannot satisfy the closed CLI config contract.", *_HIGH_INVALID, "console_config_project"),
 }
 
 

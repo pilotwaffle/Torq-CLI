@@ -46,3 +46,7 @@ The resolver executes one stage at a time: `registry_read`, `registry_parse`, `r
 No runtime resolver is added. If a future attended feature needs a default, Linux uses absolute non-empty `XDG_CONFIG_HOME/torq/config.yaml`; if XDG is absent/empty/non-absolute, it may use absolute non-empty `HOME/.config/torq/config.yaml` only when `HOME` is absolute. macOS uses absolute `HOME/Library/Application Support/TORQ/config.yaml` only when `HOME` is absolute. Windows uses `APPDATA\TORQ\config.yaml` only when `APPDATA` is an absolute non-empty current-user roaming application-data path. Invalid variables cause no probing, creation, expansion, or fallback beyond the Linux XDG-to-HOME rule.
 
 T06B does not add discovery, provider access, credential lookup, persistence, migration, scheduling, billing, deployment, or operator actions. T06A remains limited to the authenticated normalized JSON projection; raw Console YAML and without-manual-translation evidence remain T06C/operator-gated work.
+
+T06C is intentionally separate from this T06B file contract. Its raw Console YAML grammar and
+fixed lossy projection are specified in `t06-console-compat-import-spec.md`; T06B parsing and
+all existing assertions remain frozen.

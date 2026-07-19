@@ -1,4 +1,4 @@
-"""Run the fourteen approved security/governance mutants in isolated copies."""
+"""Run the sixteen approved security/governance mutants in isolated copies."""
 
 from __future__ import annotations
 
@@ -58,6 +58,8 @@ MUTATIONS = (
     Mutation("M12", "src/torq_cli/domain/hermetic.py", '"os", "subprocess", "socket"', '"os", "socket"', "tests/test_hermetic.py::test_production_imports_forbid_subprocess"),
     Mutation("M13", "src/torq_cli/application/resolve.py", "config = parse_config_text(text)", "config = yaml.safe_load(text)", "tests/test_resolution.py::test_duplicate_yaml_mapping_is_rejected_before_schema_validation"),
     Mutation("M14", "src/torq_cli/domain/config_schema.py", "if identity in identities:\n            _parser_fail()", "if False:\n            _parser_fail()", "tests/test_config_schema.py::test_nfc_equivalent_duplicate_mapping_keys_are_parser_invalid"),
+    Mutation("M15", "src/torq_cli/application/import_v5_console_config.py", "if not validate_console_mapping(document, reference):", "if False:", "tests/test_v5_console_config_import.py::test_console_mapping_mismatch_is_rejected"),
+    Mutation("M16", "src/torq_cli/application/import_v5_console_config.py", "if contains_console_secret(document):", "if False:", "tests/test_v5_console_config_import.py::test_console_secret_is_rejected_without_echo"),
 )
 
 
@@ -86,7 +88,7 @@ def _run(root: Path, mutation: Mutation) -> subprocess.CompletedProcess[str]:
 
 
 def main() -> int:
-    configured_root = os.environ.get("TORQ_T06B_MUTANT_ROOT")
+    configured_root = os.environ.get("TORQ_T06C_MUTANT_ROOT") or os.environ.get("TORQ_T06B_MUTANT_ROOT")
     cleanup_parent = configured_root is None
     if configured_root is None:
         temporary_parent = Path(tempfile.mkdtemp(prefix="torq-t06b-mutants-"))
@@ -110,8 +112,8 @@ def main() -> int:
                     print(result.stdout)
                     return 1
                 killed += 1
-        print(f"named_mutants: {killed}/14 killed")
-        return 0 if killed == 14 else 1
+        print(f"named_mutants: {killed}/16 killed")
+        return 0 if killed == 16 else 1
     finally:
         if cleanup_parent:
             try:

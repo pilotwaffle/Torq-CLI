@@ -6,6 +6,7 @@ import pytest
 import yaml
 
 from torq_cli.application import resolve as resolve_module
+from torq_cli.application import import_v5_console_config
 from torq_cli.application.resolve import resolve_text
 from torq_cli.domain import drift_oracle
 from torq_cli.domain.findings import CATALOG, FindingCatalog, FindingSeverity
@@ -76,6 +77,10 @@ def test_finding_catalog_is_exhaustive_and_context_is_deeply_immutable() -> None
         "legacy_config_schema_invalid", "legacy_config_secret_field_forbidden",
         "legacy_config_role_duplicate", "legacy_config_role_missing",
         "legacy_config_mapping_unsupported", "legacy_config_projection_invalid",
+        "console_config_unreadable", "console_config_protected_path_denied",
+        "console_config_syntax_invalid", "console_config_schema_invalid",
+        "console_config_secret_field_forbidden", "console_config_mapping_unsupported",
+        "console_config_projection_invalid",
     }
     assert set(CATALOG) == expected
 
@@ -253,6 +258,13 @@ def _reachable_legacy(finding_id):
     return invoke
 
 
+def _reachable_console(finding_id, stage, path, status=None):
+    def invoke(monkeypatch, tmp_path, capsys):
+        return import_v5_console_config._failure(finding_id, stage, None, path, status)
+
+    return invoke
+
+
 REACHABILITY_CASES = {
     "registry_resource_missing": lambda m, c, cap: _registry_exception(m, RegistryResourceMissing()),
     "registry_unreadable": lambda m, c, cap: _registry_exception(m, RegistryUnreadable()),
@@ -301,6 +313,13 @@ REACHABILITY_CASES = {
     "legacy_config_role_missing": _reachable_legacy("legacy_config_role_missing"),
     "legacy_config_mapping_unsupported": _reachable_legacy("legacy_config_mapping_unsupported"),
     "legacy_config_projection_invalid": _reachable_legacy("legacy_config_projection_invalid"),
+    "console_config_unreadable": _reachable_console("console_config_unreadable", "console_config_read", "/console_config"),
+    "console_config_protected_path_denied": _reachable_console("console_config_protected_path_denied", "console_config_read", "/console_config", "blocked"),
+    "console_config_syntax_invalid": _reachable_console("console_config_syntax_invalid", "console_config_parse", "/"),
+    "console_config_schema_invalid": _reachable_console("console_config_schema_invalid", "console_config_validate", "/"),
+    "console_config_secret_field_forbidden": _reachable_console("console_config_secret_field_forbidden", "console_config_validate", "/"),
+    "console_config_mapping_unsupported": _reachable_console("console_config_mapping_unsupported", "console_config_map", "/agents"),
+    "console_config_projection_invalid": _reachable_console("console_config_projection_invalid", "console_config_project", "/target_config"),
 }
 
 

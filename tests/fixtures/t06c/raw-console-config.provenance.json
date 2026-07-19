@@ -1,0 +1,15 @@
+{
+    "schema":  "torq-t06c-operator-intake-v1",
+    "source_attestation":  "Console V5 config.yaml, supplied manually by the operator",
+    "sanitized_fixture_sha256":  "e3bc239739423f458d842e42c67877a604c2b8f4bce29a962a4a867d4df2f0a4",
+    "byte_count":  2829,
+    "encoding":  "UTF-8",
+    "bom":  false,
+    "line_endings":  "LF",
+    "redaction_performed":  true,
+    "redaction_categories":  [
+                                 "credentials",
+                                 "personal_paths"
+                             ],
+    "no_semantic_or_manual_translation":  true
+}

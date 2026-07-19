@@ -25,3 +25,6 @@ objects fail closed. `--output` is deliberately rejected; this slice is stdout-o
 This advances T-06 only partially. Raw Console configuration import, persistence, migration,
 credentials, provider access, runtime attestation, and the remaining Phase 1/PRD tasks require
 separate authorization and verification.
+
+T06C is a separate `import-v5-console` source adapter documented in
+`t06-console-compat-import-spec.md`; this T06A normalized JSON contract is unchanged.

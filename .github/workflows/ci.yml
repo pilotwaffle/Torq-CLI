@@ -6,57 +6,123 @@ on:
 
 jobs:
   quality-windows-py311:
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
-      - run: python -m pip install -e ".[dev]"
-      - run: python -m ruff check src tests
-      - run: python -m mypy src
-      - run: python -m pytest -q
-      - run: python scripts/run_named_mutants.py
-      - run: python -m build
-      - run: python scripts/wheel_smoke.py dist
+      - name: Bootstrap development tools (network phase)
+        run: python -m pip install --disable-pip-version-check --no-input build pytest ruff mypy types-PyYAML
+      - name: Assert runner identity
+        run: python -c "import platform,sys; assert sys.platform == 'win32' and platform.machine() in ('AMD64','x86_64') and sys.implementation.name == 'cpython' and sys.version_info[:2] == (3,11)"
+      - name: Provision audited wheelhouse (network phase)
+        run: python scripts/provision_ci_wheelhouse.py --root "$env:RUNNER_TEMP\t06c-wheelhouse" --platform windows-py311 --lock ci/t06c-wheelhouse/requirements-py311.txt --manifest ci/t06c-wheelhouse/manifest-py311.json
+      - name: Quality checks
+        env: {PYTHONPATH: src}
+        run: |
+          python -m ruff check src tests
+          python -m mypy --strict src/torq_cli
+          python -m pytest -q
+          python scripts/run_named_mutants.py
+          $env:TORQ_T06C_MUTANT_ROOT = "$env:RUNNER_TEMP\t06c-mutants-explicit"
+          python scripts/run_named_mutants.py
+      - name: Offline build and installed-artifact smoke
+        run: |
+          $source = "$env:RUNNER_TEMP\t06c-source"
+          git clone --no-local . $source
+          $env:PIP_NO_INDEX = "1"
+          $env:PIP_FIND_LINKS = "$env:RUNNER_TEMP\t06c-wheelhouse"
+          $env:PIP_CACHE_DIR = "$env:RUNNER_TEMP\t06c-pip-cache"
+          $env:PIP_NO_INPUT = "1"
+          $env:PIP_DISABLE_PIP_VERSION_CHECK = "1"
+          $env:PYTHONNOUSERSITE = "1"
+          Push-Location $source
+          python -m build --outdir "$env:RUNNER_TEMP\t06c-dist"
+          python scripts/wheel_smoke.py "$env:RUNNER_TEMP\t06c-dist" --wheelhouse "$env:RUNNER_TEMP\t06c-wheelhouse" --work-root "$env:RUNNER_TEMP\t06c-smoke"
+          Pop-Location
 
   quality-macos-py311:
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
-      - run: python -m pip install -e ".[dev]"
-      - run: python -m ruff check src tests
-      - run: python -m mypy src
-      - run: python -m pytest -q
-      - run: python scripts/run_named_mutants.py
-      - run: python -m build
-      - run: python scripts/wheel_smoke.py dist
+      - name: Bootstrap development tools (network phase)
+        run: python -m pip install --disable-pip-version-check --no-input build pytest ruff mypy types-PyYAML
+      - name: Assert exact Intel macOS runner identity before download
+        run: python -c "import platform,sys; assert sys.platform == 'darwin' and platform.machine() == 'x86_64' and sys.implementation.name == 'cpython' and sys.version_info[:2] == (3,11)"
+      - name: Provision audited wheelhouse (network phase)
+        run: python scripts/provision_ci_wheelhouse.py --root "$RUNNER_TEMP/t06c-wheelhouse" --platform macos-py311 --lock ci/t06c-wheelhouse/requirements-py311.txt --manifest ci/t06c-wheelhouse/manifest-py311.json
+      - name: Quality checks
+        env: {PYTHONPATH: src}
+        run: |
+          python -m ruff check src tests
+          python -m mypy --strict src/torq_cli
+          python -m pytest -q
+          python scripts/run_named_mutants.py
+          TORQ_T06C_MUTANT_ROOT="$RUNNER_TEMP/t06c-mutants-explicit" python scripts/run_named_mutants.py
+      - name: Offline build and installed-artifact smoke
+        run: |
+          source="$RUNNER_TEMP/t06c-source"
+          git clone --no-local . "$source"
+          export PIP_NO_INDEX=1 PIP_FIND_LINKS="$RUNNER_TEMP/t06c-wheelhouse" PIP_CACHE_DIR="$RUNNER_TEMP/t06c-pip-cache" PIP_NO_INPUT=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONNOUSERSITE=1
+          cd "$source"
+          python -m build --outdir "$RUNNER_TEMP/t06c-dist"
+          python scripts/wheel_smoke.py "$RUNNER_TEMP/t06c-dist" --wheelhouse "$RUNNER_TEMP/t06c-wheelhouse" --work-root "$RUNNER_TEMP/t06c-smoke"
 
   quality-linux-py311:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
-      - run: python -m pip install -e ".[dev]"
-      - run: python -m ruff check src tests
-      - run: python -m mypy src
-      - run: python -m pytest -q
-      - run: python scripts/run_named_mutants.py
-      - run: python -m build
-      - run: python scripts/wheel_smoke.py dist
+      - name: Bootstrap development tools (network phase)
+        run: python -m pip install --disable-pip-version-check --no-input build pytest ruff mypy types-PyYAML
+      - name: Assert runner identity
+        run: python -c "import platform,sys; assert sys.platform == 'linux' and platform.machine() == 'x86_64' and sys.implementation.name == 'cpython' and sys.version_info[:2] == (3,11)"
+      - name: Provision audited wheelhouse (network phase)
+        run: python scripts/provision_ci_wheelhouse.py --root "$RUNNER_TEMP/t06c-wheelhouse" --platform linux-py311 --lock ci/t06c-wheelhouse/requirements-py311.txt --manifest ci/t06c-wheelhouse/manifest-py311.json
+      - name: Quality checks
+        env: {PYTHONPATH: src}
+        run: |
+          python -m ruff check src tests
+          python -m mypy --strict src/torq_cli
+          python -m pytest -q
+          python scripts/run_named_mutants.py
+          TORQ_T06C_MUTANT_ROOT="$RUNNER_TEMP/t06c-mutants-explicit" python scripts/run_named_mutants.py
+      - name: Offline build and installed-artifact smoke
+        run: |
+          source="$RUNNER_TEMP/t06c-source"
+          git clone --no-local . "$source"
+          export PIP_NO_INDEX=1 PIP_FIND_LINKS="$RUNNER_TEMP/t06c-wheelhouse" PIP_CACHE_DIR="$RUNNER_TEMP/t06c-pip-cache" PIP_NO_INPUT=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONNOUSERSITE=1
+          cd "$source"
+          python -m build --outdir "$RUNNER_TEMP/t06c-dist"
+          python scripts/wheel_smoke.py "$RUNNER_TEMP/t06c-dist" --wheelhouse "$RUNNER_TEMP/t06c-wheelhouse" --work-root "$RUNNER_TEMP/t06c-smoke"
 
   headless-linux-py311:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    env: {TORQ_T06C_HEADLESS: "1"}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
-      - run: python -m pip install -e ".[dev]"
-      - run: python -m ruff check src tests
-      - run: python -m mypy src
-      - run: python -m pytest -q
-      - run: python scripts/run_named_mutants.py
-      - run: python -m build
-      - run: python scripts/wheel_smoke.py dist
+      - name: Bootstrap development tools (network phase)
+        run: python -m pip install --disable-pip-version-check --no-input build pytest ruff mypy types-PyYAML
+      - name: Assert runner identity
+        run: python -c "import platform,sys; assert sys.platform == 'linux' and platform.machine() == 'x86_64' and sys.implementation.name == 'cpython' and sys.version_info[:2] == (3,11)"
+      - name: Provision audited wheelhouse (network phase)
+        run: python scripts/provision_ci_wheelhouse.py --root "$RUNNER_TEMP/t06c-wheelhouse" --platform linux-py311 --lock ci/t06c-wheelhouse/requirements-py311.txt --manifest ci/t06c-wheelhouse/manifest-py311.json
+      - name: Headless offline quality and smoke proof
+        env: {PYTHONPATH: src}
+        run: |
+          python -m ruff check src tests
+          python -m mypy --strict src/torq_cli
+          python -m pytest -q
+          python scripts/run_named_mutants.py
+          TORQ_T06C_MUTANT_ROOT="$RUNNER_TEMP/t06c-mutants-explicit" python scripts/run_named_mutants.py
+          source="$RUNNER_TEMP/t06c-source"
+          git clone --no-local . "$source"
+          export PIP_NO_INDEX=1 PIP_FIND_LINKS="$RUNNER_TEMP/t06c-wheelhouse" PIP_CACHE_DIR="$RUNNER_TEMP/t06c-pip-cache" PIP_NO_INPUT=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONNOUSERSITE=1
+          cd "$source"
+          python -m build --outdir "$RUNNER_TEMP/t06c-dist"
+          python scripts/wheel_smoke.py "$RUNNER_TEMP/t06c-dist" --wheelhouse "$RUNNER_TEMP/t06c-wheelhouse" --work-root "$RUNNER_TEMP/t06c-smoke"

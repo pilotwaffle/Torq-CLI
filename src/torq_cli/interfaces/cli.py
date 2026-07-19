@@ -56,6 +56,48 @@ def _print_envelope(envelope: ResultEnvelope, *, compact: bool) -> bool:
     return rendering_failed
 
 
+def _write_t06c_envelope(envelope: ResultEnvelope) -> bool:
+    rendering_failed = False
+    try:
+        rendered: dict[str, Any] = envelope_to_dict(envelope)
+    except AttributeError:
+        rendering_failed = True
+        rendered = {
+            'schema_version': '1.0.0',
+            'command': envelope.command,
+            'status': 'internal_error',
+            'snapshot': None,
+            'findings': [{
+                'id': 'internal_error',
+                'message': 'Internal failure occurred without exposing details.',
+                'severity': 'critical',
+                'bucket': 'A',
+                'status_class': 'internal_error',
+                'stage': 'complete',
+                'path': '/',
+                'context': {},
+            }],
+            'data': {},
+        }
+    payload = json.dumps(rendered, sort_keys=True, separators=(',', ':')).encode('utf-8') + b'\n'
+    binary = getattr(sys.stdout, 'buffer', None)
+    if binary is not None:
+        try:
+            written = binary.write(payload)
+            if written != len(payload):
+                return True
+            binary.flush()
+        except Exception:
+            return True
+        return rendering_failed
+    try:
+        sys.stdout.write(payload[:-1].decode('utf-8') + '\n')
+        sys.stdout.flush()
+    except Exception:
+        return True
+    return rendering_failed
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="torq")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -81,7 +123,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if any(argument == "--output" or argument.startswith("--output=") for argument in supplied):
         if "import-v5-console" in supplied:
             envelope = import_v5_console_config.output_rejected()
-            return 5 if _print_envelope(envelope, compact=True) else 2
+            return 5 if _write_t06c_envelope(envelope) else 2
         envelope = import_v5_config.output_rejected()
         return 5 if _print_envelope(envelope, compact=True) else 2
     args = _parser().parse_args(argv)
@@ -99,7 +141,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if args.config_command == "import-v5-console"
                 else import_v5_config.internal_error()
             )
-        rendering_failed = _print_envelope(envelope, compact=True)
+        rendering_failed = (
+            _write_t06c_envelope(envelope)
+            if args.config_command == 'import-v5-console'
+            else _print_envelope(envelope, compact=True)
+        )
         if rendering_failed:
             return 5
         if envelope.status == "internal_error":

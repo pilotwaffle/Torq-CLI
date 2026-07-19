@@ -30,9 +30,16 @@ def test_protected_path_denied_before_read() -> None:
     assert error.value.finding_id == "protected_path_denied"
 
 
-def test_explicit_config_path_is_allowed() -> None:
-    path = r"C:\temp\torq-config.yaml" if hermetic_module.sys.platform.startswith("win") else "/tmp/torq-config.yaml"
-    assert_read_allowed(path)
+def test_explicit_config_path_is_allowed(tmp_path) -> None:
+    candidate_root = tmp_path.resolve()
+    assert candidate_root.is_absolute()
+    for component in (candidate_root, *candidate_root.parents):
+        if component.exists():
+            assert not component.is_symlink()
+
+    config_path = candidate_root / "torq-config.yaml"
+    assert config_path.is_absolute()
+    assert_read_allowed(str(config_path))
 
 
 def test_production_imports_forbid_subprocess() -> None:

@@ -101,9 +101,61 @@ def test_console_secret_is_rejected_without_echo(tmp_path: Path, capsys) -> None
 
 def test_committed_wheelhouse_lock_accepts_safe_global_option() -> None:
     hashes = _lock_hashes(LOCK)
+    assert set(hashes) == {'PyYAML', 'setuptools', 'wheel', 'packaging'}
+    assert {name: len(values) for name, values in hashes.items()} == {
+        'PyYAML': 3,
+        'setuptools': 1,
+        'wheel': 1,
+        'packaging': 1,
+    }
 
-    assert set(hashes) == {"PyYAML", "setuptools", "wheel", "packaging"}
-    assert all(hashes[name] for name in hashes)
+
+def test_wheelhouse_lock_rejects_requirement_after_open_hash_continuation(
+    tmp_path: Path,
+) -> None:
+    lock = tmp_path / 'requirements.txt'
+    lines = LOCK.read_text(encoding='utf-8').splitlines()
+    hash_lines = [index for index, line in enumerate(lines) if line.strip().startswith('--hash')]
+    lines[hash_lines[2]] += chr(92)
+    lock.write_text(chr(10).join(lines) + chr(10), encoding='utf-8')
+
+    with pytest.raises(SystemExit):
+        _lock_hashes(lock)
+
+
+def test_wheelhouse_lock_rejects_open_hash_continuation_at_eof(tmp_path: Path) -> None:
+    lock = tmp_path / 'requirements.txt'
+    lines = LOCK.read_text(encoding='utf-8').splitlines()
+    lines[-1] += chr(92)
+    lock.write_text(chr(10).join(lines) + chr(10), encoding='utf-8')
+
+    with pytest.raises(SystemExit):
+        _lock_hashes(lock)
+
+
+@pytest.mark.parametrize(
+    'line',
+    (
+        '',
+        '# comment while continuation is open',
+        '--only-binary=:all:',
+        'setuptools==82.0.1',
+        '--find-links=https://evil.example',
+        '--hash=sha256:not-a-valid-hash',
+        'bare-token',
+    ),
+)
+def test_wheelhouse_lock_rejects_non_hash_line_while_continuation_is_open(
+    tmp_path: Path, line: str
+) -> None:
+    lock = tmp_path / 'requirements.txt'
+    lines = LOCK.read_text(encoding='utf-8').splitlines()
+    hash_lines = [index for index, value in enumerate(lines) if value.strip().startswith('--hash')]
+    lines.insert(hash_lines[0] + 1, line)
+    lock.write_text(chr(10).join(lines) + chr(10), encoding='utf-8')
+
+    with pytest.raises(SystemExit):
+        _lock_hashes(lock)
 
 
 @pytest.mark.parametrize(

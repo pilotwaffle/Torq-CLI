@@ -112,6 +112,8 @@ def _lock_hashes(path: Path) -> dict[str, set[str]]:
     continuation_open = False
     for line in lines:
         stripped = line.strip()
+        if continuation_open and (not stripped or stripped.startswith('#') or not stripped.startswith('--hash')):
+            _fail('wheelhouse lock continuation requires a hash line')
         if not stripped or stripped.startswith("#"):
             continue
         if stripped.startswith("--hash"):
@@ -150,6 +152,8 @@ def _lock_hashes(path: Path) -> dict[str, set[str]]:
         continuation_open = match.group("continuation") is not None
     if current is not None and not current_has_hash:
         _fail("wheelhouse lock requirement has no attached hash")
+    if continuation_open:
+        _fail('wheelhouse lock continuation is open at EOF')
     return result
 
 

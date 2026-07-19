@@ -43,7 +43,12 @@ def test_require_effective_exits_four(tmp_path, capsys) -> None:
 
 
 def test_protected_config_path_is_denied_before_read(capsys) -> None:
-    code = main(["profile", "validate", "--config", r"E:\TORQ-CONSOLE\config.yaml"])
+    config_path = (
+        r"E:\TORQ-CONSOLE\config.yaml"
+        if hermetic_module.sys.platform.startswith("win")
+        else "/tmp/torq-console/config.yaml"
+    )
+    code = main(["profile", "validate", "--config", config_path])
 
     assert code == 3
     output = json.loads(capsys.readouterr().out)
@@ -57,7 +62,11 @@ def test_protected_cli_path_retains_config_read_snapshot(monkeypatch, capsys) ->
         raise ProtectedPathError("protected path access denied")
 
     monkeypatch.setattr(resolve_module.ReadOnlyConfigReader, "read_utf8", deny)
-    config_path = r"E:\TORQ-CONSOLE\config.yaml"
+    config_path = (
+        r"E:\TORQ-CONSOLE\config.yaml"
+        if hermetic_module.sys.platform.startswith("win")
+        else "/tmp/torq-console/config.yaml"
+    )
 
     code = main(["profile", "validate", "--config", config_path])
 
@@ -231,7 +240,12 @@ def test_cli_import_v5_invalid_is_closed(tmp_path, capsys) -> None:
 
 
 def test_cli_import_v5_protected_path_exits_three(tmp_path, monkeypatch, capsys) -> None:
-    code = main(["config", "import-v5-normalized", "--config", r"E:\TORQ-CONSOLE\config.json"])
+    protected_path = (
+        r"E:\TORQ-CONSOLE\config.json"
+        if hermetic_module.sys.platform.startswith("win")
+        else "/tmp/torq-console/config.json"
+    )
+    code = main(["config", "import-v5-normalized", "--config", protected_path])
     output = json.loads(capsys.readouterr().out)
 
     assert code == 3
@@ -251,22 +265,23 @@ def test_cli_import_v5_protected_path_exits_three(tmp_path, monkeypatch, capsys)
     class MissingCreateFileW:
         pass
 
-    for platform, path in (("linux", str(tmp_path / "missing-primitive.json")), ("win32", r"C:\safe\missing-primitive.json")):
+    for platform, path in (("linux", "/tmp/torq-t06b-missing-primitive.json"), ("win32", r"C:\safe\missing-primitive.json")):
         def simulated_missing_primitive(candidate: str, platform=platform) -> bytes:
-            original_platform = hermetic_module.sys.platform
-            original_open = hermetic_module.os.open
-            original_windll = hermetic_module.ctypes.WinDLL
-            try:
-                hermetic_module.sys.platform = platform
-                if platform == "linux":
-                    hermetic_module.os.open = lambda *args, **kwargs: (_ for _ in ()).throw(AttributeError("missing os.open"))
-                else:
-                    hermetic_module.ctypes.WinDLL = lambda *args, **kwargs: MissingCreateFileW()
-                return hermetic_module.read_bounded_legacy_config(candidate)
-            finally:
-                hermetic_module.sys.platform = original_platform
-                hermetic_module.os.open = original_open
-                hermetic_module.ctypes.WinDLL = original_windll
+            monkeypatch.setattr(hermetic_module.sys, "platform", platform)
+            if platform == "linux":
+                monkeypatch.setattr(
+                    hermetic_module.os,
+                    "open",
+                    lambda *args, **kwargs: (_ for _ in ()).throw(AttributeError("missing os.open")),
+                )
+            else:
+                monkeypatch.setattr(
+                    hermetic_module.ctypes,
+                    "WinDLL",
+                    lambda *args, **kwargs: MissingCreateFileW(),
+                    raising=False,
+                )
+            return hermetic_module.read_bounded_legacy_config(candidate)
 
         monkeypatch.setattr(import_v5_config, "read_bounded_legacy_config", simulated_missing_primitive)
         code = main(["config", "import-v5-normalized", "--config", path])

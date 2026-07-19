@@ -19,14 +19,20 @@ from torq_cli.domain import drift_oracle
 
 
 def test_protected_path_denied_before_read() -> None:
+    protected_path = (
+        r"E:\TORQ-CONSOLE\torq_console\secret.yaml"
+        if hermetic_module.sys.platform.startswith("win")
+        else "/tmp/torq-console/torq_console/secret.yaml"
+    )
     with pytest.raises(ProtectedPathError) as error:
-        assert_read_allowed(r"E:\TORQ-CONSOLE\torq_console\secret.yaml")
+        assert_read_allowed(protected_path)
 
     assert error.value.finding_id == "protected_path_denied"
 
 
 def test_explicit_config_path_is_allowed() -> None:
-    assert_read_allowed(r"C:\temp\torq-config.yaml")
+    path = r"C:\temp\torq-config.yaml" if hermetic_module.sys.platform.startswith("win") else "/tmp/torq-config.yaml"
+    assert_read_allowed(path)
 
 
 def test_production_imports_forbid_subprocess() -> None:
@@ -48,22 +54,34 @@ def test_reader_checks_guard_before_open(monkeypatch) -> None:
         raise AssertionError("open must not run for a protected path")
 
     monkeypatch.setattr("builtins.open", fail_open)
+    protected_path = (
+        r"E:\TORQ-CONSOLE\config.yaml"
+        if hermetic_module.sys.platform.startswith("win")
+        else "/tmp/torq-console/config.yaml"
+    )
     with pytest.raises(ProtectedPathError):
-        ReadOnlyConfigReader().read_utf8(r"E:\TORQ-CONSOLE\config.yaml")
+        ReadOnlyConfigReader().read_utf8(protected_path)
 
 
 def test_canonical_resolver_alias_is_denied_before_read() -> None:
+    safe_path = r"C:\safe\alias.yaml" if hermetic_module.sys.platform.startswith("win") else "/tmp/safe/alias.yaml"
+    protected_path = r"E:\TORQ-CONSOLE\aliased.yaml" if hermetic_module.sys.platform.startswith("win") else "/tmp/torq-console/aliased.yaml"
+
     def resolver(path):
-        return Path(r"E:\TORQ-CONSOLE\aliased.yaml")
+        return Path(protected_path)
 
     with pytest.raises(ProtectedPathError):
-        assert_read_allowed(r"C:\safe\alias.yaml", resolver=resolver)
+        assert_read_allowed(safe_path, resolver=resolver)
 
 
 def test_oracle_has_no_upstream_worktree_read() -> None:
     source = inspect.getsource(drift_oracle)
     assert "TORQ-CONSOLE" not in source
     assert "subprocess" not in source
+    runner_path = Path("scripts/run_named_mutants.py")
+    if runner_path.exists():
+        runner_source = runner_path.read_text(encoding="utf-8")
+        assert "E:\\TORQ_CLI_EVIDENCE\\" not in runner_source
 
 
 def test_allowed_config_read_does_not_touch_protected_root(tmp_path, monkeypatch) -> None:
@@ -176,6 +194,7 @@ def test_allowed_candidate_is_inspected_and_read_without_resolve(monkeypatch) ->
 
 
 def test_reader_inspects_and_opens_the_same_normalized_candidate(monkeypatch) -> None:
+    monkeypatch.setattr(hermetic_module.sys, "platform", "win32")
     inspected: list[str] = []
     opened: list[str] = []
 
@@ -474,7 +493,7 @@ def test_windows_alias_and_volume_mismatch_fail_closed(monkeypatch) -> None:
 
     fds = iter([10, 11, 12])
     monkeypatch.setattr(hermetic_module, "_windows_open", native_open)
-    monkeypatch.setattr(hermetic_module.ctypes, "WinDLL", lambda *args, **kwargs: MissingCreateFileW())
+    monkeypatch.setattr(hermetic_module.ctypes, "WinDLL", lambda *args, **kwargs: MissingCreateFileW(), raising=False)
     with pytest.raises(ProtectedPathError):
         hermetic_module._windows_open(
             r"C:\safe\config.json",

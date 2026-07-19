@@ -12,7 +12,6 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MUTANT_ROOT = Path(r"E:\TORQ_CLI_EVIDENCE\t06b-20260718\luna-builder-evidence\named-mutants-tmp")
 
 
 @dataclass(frozen=True)
@@ -87,8 +86,13 @@ def _run(root: Path, mutation: Mutation) -> subprocess.CompletedProcess[str]:
 
 
 def main() -> int:
-    temporary_parent = Path(os.environ.get("TORQ_T06B_MUTANT_ROOT", str(DEFAULT_MUTANT_ROOT)))
-    temporary_parent.mkdir(parents=True, exist_ok=True)
+    configured_root = os.environ.get("TORQ_T06B_MUTANT_ROOT")
+    cleanup_parent = configured_root is None
+    if configured_root is None:
+        temporary_parent = Path(tempfile.mkdtemp(prefix="torq-t06b-mutants-"))
+    else:
+        temporary_parent = Path(configured_root)
+        temporary_parent.mkdir(parents=True, exist_ok=True)
     killed = 0
     try:
         for mutation in MUTATIONS:
@@ -109,10 +113,11 @@ def main() -> int:
         print(f"named_mutants: {killed}/14 killed")
         return 0 if killed == 14 else 1
     finally:
-        try:
-            temporary_parent.rmdir()
-        except OSError:
-            pass
+        if cleanup_parent:
+            try:
+                temporary_parent.rmdir()
+            except OSError:
+                pass
 
 
 if __name__ == "__main__":

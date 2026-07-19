@@ -220,8 +220,9 @@ def _reachable_config(config):
     return lambda monkeypatch, capsys: resolve_text("profile_validate", yaml.safe_dump(config), "explicit.yaml")
 
 
-def _reachable_config_read(monkeypatch, capsys):
-    return _cli_output(["profile", "validate", "--config", r"C:\missing\config.yaml"], capsys)
+def _reachable_config_read(monkeypatch, tmp_path, capsys):
+    missing_path = tmp_path / "missing-config.yaml"
+    return _cli_output(["profile", "validate", "--config", str(missing_path)], capsys)
 
 
 def _reachable_protected(monkeypatch, capsys):
@@ -262,7 +263,7 @@ REACHABILITY_CASES = {
     "registry_prompt_hash_mismatch": lambda m, c, cap: _reachable_prompt_hash(m),
     "registry_transition_invalid": lambda m, c, cap: _reachable_transition(m),
     "registry_profile_invalid": lambda m, c, cap: _reachable_profile(m),
-    "config_unreadable": lambda m, c, cap: _reachable_config_read(m, cap),
+    "config_unreadable": lambda m, c, cap: _reachable_config_read(m, c, cap),
     "config_syntax_invalid": lambda m, c, cap: resolve_text("profile_validate", ": [", "explicit.yaml"),
     "config_schema_invalid": lambda m, c, cap: resolve_text("profile_validate", yaml.safe_dump({"unknown": True}), "explicit.yaml"),
     "config_version_missing": lambda m, c, cap: resolve_text("profile_validate", yaml.safe_dump({}), "explicit.yaml"),

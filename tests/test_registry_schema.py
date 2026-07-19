@@ -1,7 +1,9 @@
 from dataclasses import replace
 import hashlib
 from importlib import resources
+import inspect
 import json
+from pathlib import Path
 import yaml
 
 import pytest
@@ -381,3 +383,86 @@ def test_duplicate_raw_role_identity_emits_registry_duplicate_identity(monkeypat
     assert result.findings[0].bucket == "B"
     assert result.findings[0].status_class == "invalid"
     assert result.findings[0].exit_code == 2
+
+
+def test_hash_pinned_text_checkout_policy_is_exact() -> None:
+    repository_root = Path(__file__).parents[1]
+    assert (repository_root / ".gitattributes").read_text(encoding="utf-8").splitlines() == [
+        "# Hash-pinned package payloads: checkout bytes are LF.",
+        "src/torq_cli/data/**/*.yaml text eol=lf",
+        "src/torq_cli/data/**/*.json text eol=lf",
+        "src/torq_cli/data/**/*.md text eol=lf",
+    ]
+
+
+def test_governed_registry_and_prompt_resources_are_lf_and_pinned() -> None:
+    registry = load_registry()
+    registry_bytes = resources.files("torq_cli").joinpath(
+        "data", "registry", "v1", "registry.yaml"
+    ).read_bytes()
+    assert b"\r" not in registry_bytes
+    assert hashlib.sha256(registry_bytes).hexdigest() == (
+        "e6c378aa5104b871baf6c6404f13d1373a5ec7cbf486283a0a28dab73da87128"
+    )
+    for prompt in registry.raw_document["prompts"]:
+        payload = resources.files("torq_cli").joinpath(
+            "data", "registry", "v1", prompt["resource_path"]
+        ).read_bytes()
+        assert b"\r" not in payload
+        assert hashlib.sha256(payload).hexdigest() == prompt["content_sha256"]
+
+
+def test_crlf_prompt_transform_changes_identity_and_stops_before_downstream(monkeypatch) -> None:
+    from torq_cli.application import resolve as resolve_module
+    from torq_cli.application.resolve import resolve_text
+    from torq_cli.domain import registry_schema as registry_module
+
+    prompt_path = "prompts/live.g1d.design.md"
+    original_bytes = registry_module._resource_bytes
+    original_text = registry_module._resource_text
+    original_prompt = original_text(prompt_path).encode("utf-8")
+    transformed_prompt = original_prompt.replace(b"\n", b"\r\n")
+    assert transformed_prompt != original_prompt
+    assert hashlib.sha256(transformed_prompt).hexdigest() != hashlib.sha256(original_prompt).hexdigest()
+    monkeypatch.setattr(registry_module, "_resource_bytes", lambda relative: original_bytes(relative))
+    monkeypatch.setattr(
+        registry_module,
+        "_resource_text",
+        lambda relative: transformed_prompt.decode("utf-8") if relative == prompt_path else original_text(relative),
+    )
+    registry = load_registry()
+    monkeypatch.setattr(resolve_module, "load_registry", lambda: registry)
+    downstream_called = False
+
+    def fail_downstream(*args, **kwargs):
+        nonlocal downstream_called
+        downstream_called = True
+        raise AssertionError("downstream execution must not run")
+
+    monkeypatch.setattr(resolve_module, "_resolve_config_text", fail_downstream)
+    result = resolve_text("profile_validate", "{}", "explicit.yaml")
+
+    assert not downstream_called
+    assert result.status == "invalid"
+    assert result.snapshot is not None
+    assert result.snapshot.resolution_stage == "registry_validate"
+    assert len(result.findings) == 1
+    finding = result.findings[0]
+    assert finding.id == "registry_prompt_hash_mismatch"
+    assert finding.path == "/"
+    assert finding.severity.value == "high"
+    assert finding.bucket == "B"
+    assert finding.status_class == "invalid"
+    assert finding.exit_code == 2
+    rendered = repr(result)
+    assert transformed_prompt.decode("utf-8") not in rendered
+
+
+def test_windows_ctypes_lookups_are_platform_safe() -> None:
+    from torq_cli.domain import hermetic
+
+    source = inspect.getsource(hermetic)
+    assert "ctypes.WinDLL" not in source
+    assert "ctypes.get_last_error" not in source
+    assert 'getattr(ctypes, "WinDLL")' in source
+    assert 'getattr(ctypes, "get_last_error")' in source

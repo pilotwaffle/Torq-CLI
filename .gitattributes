@@ -1,0 +1,4 @@
+# Hash-pinned package payloads: checkout bytes are LF.
+src/torq_cli/data/**/*.yaml text eol=lf
+src/torq_cli/data/**/*.json text eol=lf
+src/torq_cli/data/**/*.md text eol=lf

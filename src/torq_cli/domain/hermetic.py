@@ -228,7 +228,7 @@ def _windows_open(path: str, access: int, share: int, disposition: int, flags: i
     if not _is_windows_platform():
         _deny()
     try:
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
     except (AttributeError, NotImplementedError, OSError):
         _deny()
     try:
@@ -239,7 +239,7 @@ def _windows_open(path: str, access: int, share: int, disposition: int, flags: i
     except (AttributeError, NotImplementedError, OSError):
         _deny()
     if handle in (None, ctypes.c_void_p(-1).value):
-        error = ctypes.get_last_error()
+        error = getattr(ctypes, "get_last_error")()
         if error in _WINDOWS_SAFETY_ERRORS:
             _deny()
         raise OSError(error, "CreateFileW failed")
@@ -248,7 +248,7 @@ def _windows_open(path: str, access: int, share: int, disposition: int, flags: i
 
 def _windows_read(handle: int, size: int) -> bytes:
     try:
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
     except (AttributeError, NotImplementedError, OSError):
         _deny()
     buffer = ctypes.create_string_buffer(size)
@@ -258,7 +258,7 @@ def _windows_read(handle: int, size: int) -> bytes:
     except (AttributeError, NotImplementedError, OSError):
         _deny()
     if not success:
-        error = ctypes.get_last_error()
+        error = getattr(ctypes, "get_last_error")()
         if error in _WINDOWS_SAFETY_ERRORS:
             _deny()
         raise LegacyConfigUnreadable("legacy config read failed")
@@ -267,7 +267,7 @@ def _windows_read(handle: int, size: int) -> bytes:
 
 def _windows_long_path(path: str) -> str:
     try:
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
     except (AttributeError, NotImplementedError, OSError):
         _deny()
     buffer = ctypes.create_unicode_buffer(32768)
@@ -282,7 +282,7 @@ def _windows_long_path(path: str) -> str:
 
 def _windows_volume_guid(path: str) -> str:
     try:
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
     except (AttributeError, NotImplementedError, OSError):
         _deny()
     root = path[:3] if len(path) >= 2 and path[1] == ":" else path
@@ -311,7 +311,7 @@ class _WindowsFileInfo(ctypes.Structure):
 
 def _windows_identity(handle: int) -> tuple[int, int, int, int, bool]:
     try:
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
     except (AttributeError, NotImplementedError, OSError):
         _deny()
     info = _WindowsFileInfo()
@@ -333,7 +333,7 @@ def _windows_identity(handle: int) -> tuple[int, int, int, int, bool]:
 
 def _windows_canonical_path(path: str, handle: int) -> str:
     try:
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
     except (AttributeError, NotImplementedError, OSError):
         _deny()
     buffer = ctypes.create_unicode_buffer(32768)
@@ -350,7 +350,7 @@ def _windows_canonical_path(path: str, handle: int) -> str:
 
 def _windows_is_directory(handle: int) -> bool:
     try:
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
     except (AttributeError, NotImplementedError, OSError):
         _deny()
     info = _WindowsFileInfo()
@@ -364,7 +364,7 @@ def _windows_is_directory(handle: int) -> bool:
 
 def _windows_close(handle: int) -> None:
     try:
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
         if not kernel32.CloseHandle(ctypes.c_void_p(handle)):
             _deny()
     except (AttributeError, NotImplementedError, OSError):

@@ -211,3 +211,20 @@ Final anchors: `tests/test_config_schema.py` SHA-256 `ecadc6b941b5efc2bdf05dae36
 Limitations/residuals: raw Console YAML and without-manual-translation proof remain operator-gated T06C; symbolic defaults are documentation-only with no runtime discovery/native three-OS evidence; credential references prove syntax only; provider runtime, credentials, native macOS/Linux, persistence/migration execution, concurrency, hosted CI, Git provenance, deployment/release, and production runtime remain unverified. Existing local schema/eligibility metadata disclosure remains outside the fixed parser-envelope scope.
 
 Operator action: GitHub push is separately operator-authorized but has not been performed. Commit/push/merge/deploy/release, provider/credential configuration, billing, and any broader T06/T06C/PRD work require their own authorization.
+
+## Post-G2A T-06C Memory Update
+
+T06C is completed and verified. This records T06C only; it does not mark all of T06, Phase 1, or the full PRD complete. No merge, deployment, release, tag, branch-protection change, provider configuration, credential action, billing action, or later-slice authorization is recorded here.
+
+Actual role evidence authorized by Terra: Terra G1D `GPT-5.6 Terra High` thread `019f7638-2883-70e3-9225-62a09deee039`; Sol G1R `GPT-5.6 Sol High` thread `019f7b64-5223-7e12-81c0-d40c3bff53ae`; post-CI verifier `GPT-5.5` thread `019f7e62-7f27-7e32-b265-758d2f32f387`; final Sol G2A `GPT-5.6 Sol High` thread `019f7e6c-a4ae-7a63-bc08-be739ad1ba01`. Memory Writer: OpenAI GPT-5.5 Memory Writer thread `019f7e86-7b64-7a20-92e8-f0899a04d1e5`.
+Prior mixed-model thread `019f7e7f-a23a-7321-abef-81cf5ace0466` was superseded before commit because its write turn ran under GPT-5.6 Sol; it issued no gate approval and is not the final Memory Writer.
+
+Gate status: G1R verdict `APPROVE`; corrective G2A history is closed; final G2A verdict `APPROVE`. Final code commit `70dbc295dad124df0e724a058188c312572ba60e`, parent `244fcdb03738a5f2fd513bd110c1fbe080ff02a8`, branch `agent/t06a-t06b-verified`; `origin/agent/t06a-t06b-verified` matched the final commit exactly. Draft PR #1 is open at `https://github.com/pilotwaffle/Torq-CLI/pull/1`, from `agent/t06a-t06b-verified` to `main`.
+
+Verification status: local verifier recorded `1,536 passed / 4 skipped`; T06C file `1,169 passed`; Ruff passed; strict mypy passed across 18 source files; no-network audit passed; named mutants `16/16 killed` in both default and explicit-root modes. Hosted push run `29723893365` and PR run `29723895082` completed successfully at the exact final SHA. The detached worktree had no tracked or staged changes; exactly 29 untracked `.pyc` files remained preserved, unstaged, and unmodified.
+
+Approved invariant and implemented boundary: only explicitly supplied sanitized Console V5 YAML satisfying the complete closed grammar is read once through the protected reader, preflighted before construction, scanned without disclosure, authenticated against immutable registry/oracle resources, and projected solely to `torq-v5-repo-compat`. Product runtime remains offline, read-only, credential-free, nonpersistent, source-path-free, runtime-inert, `runtime_effective=false`, and `offline_unattested`. T06A and T06B remain frozen.
+
+Residuals and known limitations: provenance remains operator-attested rather than cryptographically bound to the protected original; compatibility is intentionally limited to the pinned Console V5 grammar; source orchestration metadata is deliberately discarded; secret detection is limited to enumerated classes and conservatively rejects malformed HTTP(S) candidates; hosted runner images, actions, and permitted bootstrap are externally maintained; sanitized fixtures remain in tests but are excluded from wheel and sdist artifacts; local verification ran on CPython 3.13 while hosted CI provides the required CPython 3.11 proof.
+
+Remaining operator actions: review, undraft, and merge PR #1 if appropriate; release, deploy, tag, and branch-protection actions; provider, credential, and billing configuration; and any broader T06, Phase 1, PRD, or later-slice authority.

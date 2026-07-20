@@ -53,6 +53,9 @@ TARGET_SHA256 = "63ffadbe88e6b04ac732d5a282e27e0af1a2bbd80f89412ad1a4364e01a3650
 LOCK = Path(__file__).parents[1] / "ci" / "t06c-wheelhouse" / "requirements-py311.txt"
 MANIFEST = Path(__file__).parents[1] / "ci" / "t06c-wheelhouse" / "manifest-py311.json"
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+WINDOWS_ROLE_TEST_ROOT_ASSIGNMENT = (
+    r'$env:TORQ_T06C_ROLE_TEST_ROOT = "$env:RUNNER_TEMP\t06c-role-specific-cases"'
+)
 
 LITERAL_ROLES = ("g1d", "g1r", "builder", "g2a", "refine_bug", "refine_ui")
 LITERAL_PATHS = (
@@ -753,12 +756,53 @@ def _external_case_path(name: str) -> Path:
     return root / name
 
 
+def _windows_quality_step(windows_job: dict[str, object]) -> tuple[dict[str, object], str]:
+    steps = windows_job["steps"]
+    assert isinstance(steps, list)
+    quality_steps = [
+        step for step in steps
+        if isinstance(step, dict) and step.get("name") == "Quality checks"
+    ]
+    assert len(quality_steps) == 1
+    quality_step = quality_steps[0]
+    assert isinstance(quality_step, dict)
+    assert quality_step.get("env") == {"PYTHONPATH": "src"}
+    run = quality_step.get("run")
+    assert isinstance(run, str)
+    return quality_step, run
+
+
+def _first_executable_powershell_line(lines: list[str]) -> tuple[int, str]:
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            return index, stripped
+    raise AssertionError("PowerShell run block has no executable line")
+
+
 def _assert_windows_native_commands_are_guarded(workflow: str) -> None:
     document = yaml.safe_load(workflow)
     windows_job = document["jobs"]["quality-windows-py311"]
-    assert windows_job["env"]["TORQ_T06C_ROLE_TEST_ROOT"] == (
-        r"${{ runner.temp }}\t06c-role-specific-cases"
+    job_env = windows_job.get("env", {})
+    assert not isinstance(job_env, dict) or "TORQ_T06C_ROLE_TEST_ROOT" not in job_env
+    assert "${{ runner.temp }}" not in workflow
+
+    _, quality_run = _windows_quality_step(windows_job)
+    quality_lines = quality_run.splitlines()
+    assignment_index, first_executable = _first_executable_powershell_line(quality_lines)
+    assert first_executable == WINDOWS_ROLE_TEST_ROOT_ASSIGNMENT
+    quality_command_prefixes = (
+        "python -m ruff check src tests",
+        "python -m mypy --strict src/torq_cli",
+        "python -m pytest -q",
+        "python scripts/run_named_mutants.py",
     )
+    quality_command_indexes = [
+        index for index, line in enumerate(quality_lines)
+        if line.strip().startswith(quality_command_prefixes)
+    ]
+    assert len(quality_command_indexes) == 5
+    assert all(index > assignment_index for index in quality_command_indexes)
 
     native_commands: list[tuple[str, list[str], int]] = []
     for step in windows_job["steps"]:
@@ -865,6 +909,59 @@ def test_role_test_root_rejects_repository_path_before_writing(monkeypatch) -> N
 
 def test_windows_workflow_contract_and_native_command_guards() -> None:
     _assert_windows_native_commands_are_guarded(WORKFLOW.read_text(encoding="utf-8"))
+
+
+def test_windows_workflow_structural_validator_rejects_missing_runtime_assignment() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    mutated = workflow.replace(
+        f"          {WINDOWS_ROLE_TEST_ROOT_ASSIGNMENT}\n", "", 1
+    )
+
+    with pytest.raises(AssertionError):
+        _assert_windows_native_commands_are_guarded(mutated)
+
+
+def test_windows_workflow_structural_validator_rejects_late_runtime_assignment() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assignment_line = f"          {WINDOWS_ROLE_TEST_ROOT_ASSIGNMENT}"
+    mutated = workflow.replace(f"{assignment_line}\n", "", 1)
+    mutated = mutated.replace(
+        "          python -m ruff check src tests",
+        f"          python -m ruff check src tests\n{assignment_line}",
+        1,
+    )
+
+    with pytest.raises(AssertionError):
+        _assert_windows_native_commands_are_guarded(mutated)
+
+
+def test_windows_workflow_structural_validator_rejects_job_level_runner_temp_root() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    mutated = workflow.replace(
+        "    runs-on: windows-2022\n",
+        "    runs-on: windows-2022\n"
+        "    env:\n"
+        "      TORQ_T06C_ROLE_TEST_ROOT: ${{ runner.temp }}\\t06c-role-specific-cases\n",
+        1,
+    )
+
+    with pytest.raises(AssertionError):
+        _assert_windows_native_commands_are_guarded(mutated)
+
+
+def test_windows_workflow_structural_validator_rejects_step_runner_temp_root() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    mutated = workflow.replace(
+        "        env: {PYTHONPATH: src}\n        run: |\n",
+        "        env:\n"
+        "          PYTHONPATH: src\n"
+        "          TORQ_T06C_ROLE_TEST_ROOT: ${{ runner.temp }}\\t06c-role-specific-cases\n"
+        "        run: |\n",
+        1,
+    )
+
+    with pytest.raises(AssertionError):
+        _assert_windows_native_commands_are_guarded(mutated)
 
 
 def test_windows_workflow_guard_regression_rejects_detached_guard() -> None:

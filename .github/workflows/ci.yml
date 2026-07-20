@@ -7,8 +7,6 @@ on:
 jobs:
   quality-windows-py311:
     runs-on: windows-2022
-    env:
-      TORQ_T06C_ROLE_TEST_ROOT: ${{ runner.temp }}\t06c-role-specific-cases
     steps:
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
@@ -56,6 +54,7 @@ jobs:
       - name: Quality checks
         env: {PYTHONPATH: src}
         run: |
+          $env:TORQ_T06C_ROLE_TEST_ROOT = "$env:RUNNER_TEMP\t06c-role-specific-cases"
           python -m ruff check src tests
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m mypy --strict src/torq_cli

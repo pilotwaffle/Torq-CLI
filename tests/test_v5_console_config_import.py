@@ -2101,11 +2101,88 @@ def test_W2_missing_and_duplicate_members_are_rejected(tmp_path: Path) -> None:
         provisioner._assert_artifacts(DuplicateRoot(), expected)
 
 
-def test_W2_runtime_mismatch_stops_before_download() -> None:
+RUNTIME_VALID_CASES = (
+    ("windows-py311", "win32", "AMD64"),
+    ("windows-py311", "win32", "x86_64"),
+    ("macos-py311", "darwin", "x86_64"),
+    ("linux-py311", "linux", "x86_64"),
+)
+
+
+@pytest.mark.parametrize(("platform_id", "sys_platform", "machine"), RUNTIME_VALID_CASES)
+def test_W2_runtime_valid_matrix_is_host_independent(
+    monkeypatch, platform_id: str, sys_platform: str, machine: str
+) -> None:
     import scripts.provision_ci_wheelhouse as provisioner
 
-    with pytest.raises(SystemExit):
-        provisioner._assert_runtime("linux-py311")
+    monkeypatch.setattr(provisioner.sys, "platform", sys_platform)
+    monkeypatch.setattr(provisioner.sys, "implementation", SimpleNamespace(name="cpython"))
+    monkeypatch.setattr(provisioner.sys, "version_info", (3, 11))
+    monkeypatch.setattr(provisioner.platform, "machine", lambda: machine)
+    assert provisioner._assert_runtime(platform_id) is None
+
+
+RUNTIME_MAIN_MISMATCH_CASES = (
+    pytest.param("windows-py311", "linux", "AMD64", "cpython", (3, 11), "Windows CPython 3.11 AMD64 runtime assertion failed", id="windows-platform"),
+    pytest.param("macos-py311", "linux", "x86_64", "cpython", (3, 11), "macos-15-intel CPython 3.11 x86_64 runtime assertion failed", id="macos-platform"),
+    pytest.param("linux-py311", "win32", "x86_64", "cpython", (3, 11), "Ubuntu CPython 3.11 x86_64 runtime assertion failed", id="linux-platform"),
+    pytest.param("windows-py311", "win32", "ARM64", "cpython", (3, 11), "Windows CPython 3.11 AMD64 runtime assertion failed", id="windows-architecture"),
+    pytest.param("macos-py311", "darwin", "arm64", "cpython", (3, 11), "macos-15-intel CPython 3.11 x86_64 runtime assertion failed", id="macos-architecture"),
+    pytest.param("linux-py311", "linux", "aarch64", "cpython", (3, 11), "Ubuntu CPython 3.11 x86_64 runtime assertion failed", id="linux-architecture"),
+    pytest.param("windows-py311", "win32", "AMD64", "pypy", (3, 11), "unsupported Python implementation or version; stopped before download", id="windows-implementation"),
+    pytest.param("macos-py311", "darwin", "x86_64", "pypy", (3, 11), "unsupported Python implementation or version; stopped before download", id="macos-implementation"),
+    pytest.param("linux-py311", "linux", "x86_64", "pypy", (3, 11), "unsupported Python implementation or version; stopped before download", id="linux-implementation"),
+    pytest.param("windows-py311", "win32", "AMD64", "cpython", (3, 10), "unsupported Python implementation or version; stopped before download", id="windows-version"),
+    pytest.param("macos-py311", "darwin", "x86_64", "cpython", (3, 10), "unsupported Python implementation or version; stopped before download", id="macos-version"),
+    pytest.param("linux-py311", "linux", "x86_64", "cpython", (3, 10), "unsupported Python implementation or version; stopped before download", id="linux-version"),
+)
+
+
+@pytest.mark.parametrize(
+    ("platform_id", "sys_platform", "machine", "implementation", "version_info", "message"),
+    RUNTIME_MAIN_MISMATCH_CASES,
+)
+def test_W2_runtime_mismatch_matrix_stops_before_download(
+    monkeypatch, tmp_path: Path, platform_id: str, sys_platform: str, machine: str,
+    implementation: str, version_info: tuple[int, int], message: str,
+) -> None:
+    import scripts.provision_ci_wheelhouse as provisioner
+
+    monkeypatch.setenv("TORQ_T06C_CI_TEMP_ROOT", str(tmp_path))
+    monkeypatch.delenv("TORQ_T06C_OFFICIAL_INDEX", raising=False)
+    monkeypatch.setattr(provisioner.sys, "platform", sys_platform)
+    monkeypatch.setattr(provisioner.sys, "implementation", SimpleNamespace(name=implementation))
+    monkeypatch.setattr(provisioner.sys, "version_info", version_info)
+    monkeypatch.setattr(provisioner.platform, "machine", lambda: machine)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(provisioner.subprocess, "run", lambda command, **kwargs: calls.append(command) or SimpleNamespace(returncode=0))
+    manifest_calls: list[Path] = []
+
+    def fail_manifest(path: Path) -> object:
+        manifest_calls.append(path)
+        raise AssertionError("manifest loaded")
+
+    monkeypatch.setattr(provisioner, "_load_manifest", fail_manifest)
+    artifact_calls: list[Path] = []
+
+    def fail_artifacts(root: Path, artifacts: object) -> object:
+        artifact_calls.append(root)
+        raise AssertionError("artifacts audited")
+
+    monkeypatch.setattr(provisioner, "_assert_artifacts", fail_artifacts)
+    root = tmp_path / f"runtime-mismatch-{platform_id}-{sys_platform}-{machine}-{implementation}-{version_info[1]}"
+    assert not root.exists()
+
+    with pytest.raises(SystemExit) as error:
+        provisioner.main(["--root", str(root), "--platform", platform_id, "--lock", str(LOCK), "--manifest", str(MANIFEST)])
+
+    assert str(error.value) == message
+    assert calls == []
+    assert manifest_calls == []
+    assert artifact_calls == []
+    assert not root.exists()
+    assert not (root / "audit.json").exists()
+    assert str(root) not in str(error.value)
 
 
 def test_W2_nonempty_root_and_nonofficial_index_stop_before_pip(monkeypatch, tmp_path: Path) -> None:

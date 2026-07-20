@@ -7,6 +7,8 @@ on:
 jobs:
   quality-windows-py311:
     runs-on: windows-2022
+    env:
+      TORQ_T06C_ROLE_TEST_ROOT: ${{ runner.temp }}\t06c-role-specific-cases
     steps:
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
@@ -25,11 +27,17 @@ jobs:
           assert len(raw) == meta['byte_count']
           assert meta['encoding'] == 'UTF-8' and meta['bom'] is False and meta['line_endings'] == 'LF'
       - name: Bootstrap development tools (network phase)
-        run: python -m pip install --disable-pip-version-check --no-input build pytest ruff mypy types-PyYAML
+        run: |
+          python -m pip install --disable-pip-version-check --no-input build pytest ruff mypy types-PyYAML
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Assert runner identity
-        run: python -c "import platform,sys; assert sys.platform == 'win32' and platform.machine() in ('AMD64','x86_64') and sys.implementation.name == 'cpython' and sys.version_info[:2] == (3,11)"
+        run: |
+          python -c "import platform,sys; assert sys.platform == 'win32' and platform.machine() in ('AMD64','x86_64') and sys.implementation.name == 'cpython' and sys.version_info[:2] == (3,11)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Provision audited wheelhouse (network phase)
-        run: python scripts/provision_ci_wheelhouse.py --root "$env:RUNNER_TEMP\t06c-wheelhouse" --platform windows-py311 --lock ci/t06c-wheelhouse/requirements-py311.txt --manifest ci/t06c-wheelhouse/manifest-py311.json
+        run: |
+          python scripts/provision_ci_wheelhouse.py --root "$env:RUNNER_TEMP\t06c-wheelhouse" --platform windows-py311 --lock ci/t06c-wheelhouse/requirements-py311.txt --manifest ci/t06c-wheelhouse/manifest-py311.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install audited runtime dependencies (offline)
         env:
           PIP_NO_INDEX: "1"
@@ -42,20 +50,28 @@ jobs:
           $env:PIP_FIND_LINKS = $wheelhouse
           $env:PIP_CACHE_DIR = $runtime_cache
           python -m pip install --no-index --no-deps --only-binary=:all: --require-hashes --force-reinstall --find-links "$wheelhouse" --cache-dir "$runtime_cache" --no-input --disable-pip-version-check -r ci/t06c-wheelhouse/requirements-py311.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -c "import yaml; assert yaml.__version__ == '6.0.2'"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Quality checks
         env: {PYTHONPATH: src}
         run: |
           python -m ruff check src tests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m mypy --strict src/torq_cli
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pytest -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/run_named_mutants.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:TORQ_T06C_MUTANT_ROOT = "$env:RUNNER_TEMP\t06c-mutants-explicit"
           python scripts/run_named_mutants.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Offline build and installed-artifact smoke
         run: |
           $source = "$env:RUNNER_TEMP\t06c-source"
           git clone --no-local . $source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:PIP_NO_INDEX = "1"
           $env:PIP_FIND_LINKS = "$env:RUNNER_TEMP\t06c-wheelhouse"
           $env:PIP_CACHE_DIR = "$env:RUNNER_TEMP\t06c-pip-cache"
@@ -64,7 +80,9 @@ jobs:
           $env:PYTHONNOUSERSITE = "1"
           Push-Location $source
           python -m build --outdir "$env:RUNNER_TEMP\t06c-dist"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/wheel_smoke.py "$env:RUNNER_TEMP\t06c-dist" --wheelhouse "$env:RUNNER_TEMP\t06c-wheelhouse" --work-root "$env:RUNNER_TEMP\t06c-smoke"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Pop-Location
 
   quality-macos-py311:

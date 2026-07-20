@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -51,6 +52,7 @@ FIXTURE = Path(__file__).parent / "fixtures" / "t06c" / "raw-console-config.sani
 TARGET_SHA256 = "63ffadbe88e6b04ac732d5a282e27e0af1a2bbd80f89412ad1a4364e01a3650e"
 LOCK = Path(__file__).parents[1] / "ci" / "t06c-wheelhouse" / "requirements-py311.txt"
 MANIFEST = Path(__file__).parents[1] / "ci" / "t06c-wheelhouse" / "manifest-py311.json"
+WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 
 LITERAL_ROLES = ("g1d", "g1r", "builder", "g2a", "refine_bug", "refine_ui")
 LITERAL_PATHS = (
@@ -729,10 +731,150 @@ def _valid_console_document() -> dict[str, object]:
     return copy.deepcopy(document)
 
 
+def _role_test_root() -> Path:
+    override = os.environ.get("TORQ_T06C_ROLE_TEST_ROOT")
+    if override is None or override == "":
+        root = Path(tempfile.gettempdir()).resolve() / "torq-cli-t06c-role-specific-cases"
+    else:
+        expanded = Path(os.path.expandvars(override)).expanduser()
+        if not expanded.is_absolute():
+            raise ValueError("TORQ_T06C_ROLE_TEST_ROOT must be an absolute path")
+        root = expanded.resolve()
+
+    repository = REPO_ROOT.resolve()
+    if root == repository or repository in root.parents:
+        raise ValueError("TORQ_T06C_ROLE_TEST_ROOT must be outside the repository")
+    return root
+
+
 def _external_case_path(name: str) -> Path:
-    root = Path(os.environ.get("TORQ_T06C_ROLE_TEST_ROOT", r"E:\tmp\t06c_role_specific_cases"))
+    root = _role_test_root()
     root.mkdir(parents=True, exist_ok=True)
     return root / name
+
+
+def _assert_windows_native_commands_are_guarded(workflow: str) -> None:
+    document = yaml.safe_load(workflow)
+    windows_job = document["jobs"]["quality-windows-py311"]
+    assert windows_job["env"]["TORQ_T06C_ROLE_TEST_ROOT"] == (
+        r"${{ runner.temp }}\t06c-role-specific-cases"
+    )
+
+    native_commands: list[tuple[str, list[str], int]] = []
+    for step in windows_job["steps"]:
+        if step.get("shell") == "python" or not isinstance(step.get("run"), str):
+            continue
+        lines = step["run"].splitlines()
+        for index, line in enumerate(lines):
+            command = line.strip()
+            if re.match(r"^(?:python|git)(?:\s|$)", command):
+                native_commands.append((command, lines, index))
+
+    commands = [command for command, _, _ in native_commands]
+    required_prefixes = (
+        "python -m pip install --disable-pip-version-check",
+        'python -c "import platform,sys;',
+        "python scripts/provision_ci_wheelhouse.py",
+        "python -m pip install --no-index",
+        'python -c "import yaml;',
+        "python -m ruff check src tests",
+        "python -m mypy --strict src/torq_cli",
+        "python -m pytest -q",
+        "git clone --no-local .",
+        "python -m build --outdir",
+        "python scripts/wheel_smoke.py",
+    )
+    for prefix in required_prefixes:
+        assert sum(command.startswith(prefix) for command in commands) == 1, prefix
+    assert commands.count("python scripts/run_named_mutants.py") == 2
+
+    guard = re.compile(r"if \(\$LASTEXITCODE -ne 0\) \{ exit \$LASTEXITCODE \}")
+    assert native_commands
+    for command, lines, index in native_commands:
+        assert index + 1 < len(lines), command
+        assert guard.fullmatch(lines[index + 1].strip()), command
+
+
+def test_role_test_root_default_is_external_and_host_independent(monkeypatch) -> None:
+    monkeypatch.delenv("TORQ_T06C_ROLE_TEST_ROOT", raising=False)
+
+    root = _role_test_root()
+
+    assert root.is_absolute()
+    assert REPO_ROOT.resolve() not in (root, *root.parents)
+    former_default = f"{chr(69)}:{chr(92)}tmp{chr(92)}t06c_role_specific_cases"
+    assert former_default not in Path(__file__).read_text(encoding="utf-8")
+
+
+def test_role_test_root_explicit_absolute_override_is_honored(monkeypatch, tmp_path: Path) -> None:
+    override = tmp_path / "external" / ".." / "role-cases"
+    monkeypatch.setenv("TORQ_T06C_ROLE_TEST_ROOT", str(override))
+
+    assert _role_test_root() == override.resolve()
+
+
+def test_role_test_root_empty_override_uses_default(monkeypatch) -> None:
+    monkeypatch.delenv("TORQ_T06C_ROLE_TEST_ROOT", raising=False)
+    default = _role_test_root()
+    monkeypatch.setenv("TORQ_T06C_ROLE_TEST_ROOT", "")
+
+    assert _role_test_root() == default
+
+
+@pytest.mark.parametrize("override", ("relative-role-cases", str(REPO_ROOT / "inside-role-cases")))
+def test_role_test_root_rejects_unsafe_overrides(monkeypatch, override: str) -> None:
+    monkeypatch.setenv("TORQ_T06C_ROLE_TEST_ROOT", override)
+
+    with pytest.raises(ValueError):
+        _role_test_root()
+
+
+def test_role_test_process_cases_use_selected_external_root(monkeypatch, tmp_path: Path) -> None:
+    root = tmp_path / "role-cases"
+    monkeypatch.setenv("TORQ_T06C_ROLE_TEST_ROOT", str(root))
+
+    s1_document = _valid_console_document()
+    del s1_document["agents"]["g1d"]["role"]
+    s1_path = _external_case_path("s1-subprocess.yaml")
+    s1_path.write_bytes(_dump_console_document(s1_document))
+    s1_result = _run_source_console(s1_path)
+
+    s2_document = _valid_console_document()
+    s2_document["agents"]["g1d"]["reads"] = ["artifacts/00_input/prd.md", 1]
+    s2_path = _external_case_path("s2-subprocess.yaml")
+    s2_path.write_bytes(_dump_console_document(s2_document))
+    s2_result = _run_source_console(s2_path)
+
+    assert s1_result.returncode == 2
+    assert s2_result.returncode == 2
+    assert s1_path.parent == root.resolve()
+    assert s2_path.parent == root.resolve()
+    assert REPO_ROOT.resolve() not in (s1_path.resolve(), *s1_path.resolve().parents)
+    assert REPO_ROOT.resolve() not in (s2_path.resolve(), *s2_path.resolve().parents)
+
+
+def test_role_test_root_rejects_repository_path_before_writing(monkeypatch) -> None:
+    forbidden = REPO_ROOT / f".t06c-role-test-forbidden-{os.getpid()}-{id(monkeypatch)}"
+    assert not forbidden.exists()
+    monkeypatch.setenv("TORQ_T06C_ROLE_TEST_ROOT", str(forbidden))
+
+    with pytest.raises(ValueError):
+        _external_case_path("should-not-be-created.yaml")
+    assert not forbidden.exists()
+
+
+def test_windows_workflow_contract_and_native_command_guards() -> None:
+    _assert_windows_native_commands_are_guarded(WORKFLOW.read_text(encoding="utf-8"))
+
+
+def test_windows_workflow_guard_regression_rejects_detached_guard() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    expected = "          python -m pytest -q\n          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"
+    assert expected in workflow
+    mutated = workflow.replace(expected, "          python -m pytest -q", 1)
+
+    with pytest.raises(AssertionError):
+        _assert_windows_native_commands_are_guarded(mutated)
 
 
 def _dump_console_document(document: dict[str, object]) -> bytes:

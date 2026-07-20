@@ -23,15 +23,35 @@ PLATFORM_KEYS = {
 }
 PACKAGE_NAMES = ("PyYAML", "setuptools", "wheel", "packaging")
 PACKAGE_VERSIONS = {"PyYAML": "6.0.2", "setuptools": "82.0.1", "wheel": "0.47.0", "packaging": "26.0"}
+APPROVED_PLATFORM_ARTIFACTS: dict[str, tuple[dict[str, Any], ...]] = {
+    "windows-py311": (
+        {"name": "PyYAML", "version": "6.0.2", "filename": "PyYAML-6.0.2-cp311-cp311-win_amd64.whl", "size": 161980, "sha256": "e10ce637b18caea04431ce14fabcf5c64a1c61ec9c56b071a4b7ca131ca52d44", "python_tag": "cp311", "abi_tag": "cp311", "platform_tag": "win_amd64"},
+        {"name": "setuptools", "version": "82.0.1", "filename": "setuptools-82.0.1-py3-none-any.whl", "size": 1006223, "sha256": "a59e362652f08dcd477c78bb6e7bd9d80a7995bc73ce773050228a348ce2e5bb", "python_tag": "py3", "abi_tag": "none", "platform_tag": "any"},
+        {"name": "wheel", "version": "0.47.0", "filename": "wheel-0.47.0-py3-none-any.whl", "size": 32218, "sha256": "212281cab4dff978f6cedd499cd893e1f620791ca6ff7107cf270781e587eced", "python_tag": "py3", "abi_tag": "none", "platform_tag": "any"},
+        {"name": "packaging", "version": "26.0", "filename": "packaging-26.0-py3-none-any.whl", "size": 74366, "sha256": "b36f1fef9334a5588b4166f8bcd26a14e521f2b55e6b9de3aaa80d3ff7a37529", "python_tag": "py3", "abi_tag": "none", "platform_tag": "any"},
+    ),
+    "macos-15-intel-py311-x86_64": (
+        {"name": "PyYAML", "version": "6.0.2", "filename": "PyYAML-6.0.2-cp311-cp311-macosx_10_9_x86_64.whl", "size": 184612, "sha256": "cc1c1159b3d456576af7a3e4d1ba7e6924cb39de8f67111c735f6fc832082774", "python_tag": "cp311", "abi_tag": "cp311", "platform_tag": "macosx_10_9_x86_64"},
+        {"name": "setuptools", "version": "82.0.1", "filename": "setuptools-82.0.1-py3-none-any.whl", "size": 1006223, "sha256": "a59e362652f08dcd477c78bb6e7bd9d80a7995bc73ce773050228a348ce2e5bb", "python_tag": "py3", "abi_tag": "none", "platform_tag": "any"},
+        {"name": "wheel", "version": "0.47.0", "filename": "wheel-0.47.0-py3-none-any.whl", "size": 32218, "sha256": "212281cab4dff978f6cedd499cd893e1f620791ca6ff7107cf270781e587eced", "python_tag": "py3", "abi_tag": "none", "platform_tag": "any"},
+        {"name": "packaging", "version": "26.0", "filename": "packaging-26.0-py3-none-any.whl", "size": 74366, "sha256": "b36f1fef9334a5588b4166f8bcd26a14e521f2b55e6b9de3aaa80d3ff7a37529", "python_tag": "py3", "abi_tag": "none", "platform_tag": "any"},
+    ),
+    "linux-py311": (
+        {"name": "PyYAML", "version": "6.0.2", "filename": "PyYAML-6.0.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", "size": 762952, "sha256": "3ad2a3decf9aaba3d29c8f537ac4b243e36bef957511b4766cb0057d32b0be85", "python_tag": "cp311", "abi_tag": "cp311", "platform_tag": "manylinux_2_17_x86_64.manylinux2014_x86_64"},
+        {"name": "setuptools", "version": "82.0.1", "filename": "setuptools-82.0.1-py3-none-any.whl", "size": 1006223, "sha256": "a59e362652f08dcd477c78bb6e7bd9d80a7995bc73ce773050228a348ce2e5bb", "python_tag": "py3", "abi_tag": "none", "platform_tag": "any"},
+        {"name": "wheel", "version": "0.47.0", "filename": "wheel-0.47.0-py3-none-any.whl", "size": 32218, "sha256": "212281cab4dff978f6cedd499cd893e1f620791ca6ff7107cf270781e587eced", "python_tag": "py3", "abi_tag": "none", "platform_tag": "any"},
+        {"name": "packaging", "version": "26.0", "filename": "packaging-26.0-py3-none-any.whl", "size": 74366, "sha256": "b36f1fef9334a5588b4166f8bcd26a14e521f2b55e6b9de3aaa80d3ff7a37529", "python_tag": "py3", "abi_tag": "none", "platform_tag": "any"},
+    ),
+}
 HASH_RE = re.compile(r"--hash=sha256:([0-9a-f]{64})\b", re.ASCII)
 HASH_OPTION_RE = re.compile(
-    r"--hash=sha256:[0-9a-f]{64}(?P<continuation>[ \t]*\\)?\Z",
+    r"^    --hash=sha256:(?P<hash>[0-9a-f]{64})(?P<continuation> \\)?$",
     re.ASCII,
 )
 REQUIREMENT_RE = re.compile(
-    r"(?P<name>[A-Za-z0-9][A-Za-z0-9_.-]*)=="
+    r"^(?P<name>[A-Za-z0-9][A-Za-z0-9_.-]*)=="
     r"(?P<version>[A-Za-z0-9][A-Za-z0-9_.-]*)"
-    r"(?P<continuation>[ \t]*\\)?\Z",
+    r" \\$",
     re.ASCII,
 )
 SAFE_GLOBAL_OPTIONS = frozenset({"--only-binary=:all:"})
@@ -101,90 +121,106 @@ def _load_manifest(path: Path) -> dict[str, Any]:
 
 def _lock_hashes(path: Path) -> dict[str, set[str]]:
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
+        raw = path.read_bytes()
+        text = raw.decode("utf-8", errors="strict")
+    except (OSError, UnicodeError) as exc:
         _fail("wheelhouse lock cannot be read")
         raise AssertionError from exc
-    result: dict[str, set[str]] = {}
-    current: str | None = None
-    seen: set[str] = set()
-    current_has_hash = False
-    continuation_open = False
-    for line in lines:
-        stripped = line.strip()
-        if continuation_open and (not stripped or stripped.startswith('#') or not stripped.startswith('--hash')):
-            _fail('wheelhouse lock continuation requires a hash line')
-        if not stripped or stripped.startswith("#"):
-            continue
-        if stripped.startswith("--hash"):
-            if current is None:
-                _fail("wheelhouse lock hash appears before a requirement")
-            if not continuation_open:
-                _fail("wheelhouse lock hash is not a requirement continuation")
-            hash_match = HASH_OPTION_RE.fullmatch(stripped)
-            if hash_match is None:
-                _fail("wheelhouse lock contains an invalid hash option")
-            result[current].update(HASH_RE.findall(stripped))
-            current_has_hash = True
-            continuation_open = hash_match.group("continuation") is not None
-            continue
-        if stripped in SAFE_GLOBAL_OPTIONS:
-            continue
-        if stripped.startswith("--"):
+    if "\r" in text:
+        if "\r" in text.replace("\r\n", ""):
+            _fail("wheelhouse lock contains an invalid line ending")
+        text = text.replace("\r\n", "\n")
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    if not lines:
+        _fail("wheelhouse lock must begin with the approved global option")
+    if lines[0] != "--only-binary=:all:":
+        if lines[0].startswith("--"):
             _fail("wheelhouse lock contains an unsupported global option")
-        match = REQUIREMENT_RE.fullmatch(stripped)
+        _fail("wheelhouse lock must begin with the approved global option")
+    if len(lines) < 2:
+        _fail("wheelhouse lock requirement set is incomplete")
+    result: dict[str, set[str]] = {}
+    index = 1
+    for expected_name in PACKAGE_NAMES:
+        if index >= len(lines):
+            _fail("wheelhouse lock requirement set is incomplete")
+        match = REQUIREMENT_RE.fullmatch(lines[index])
         if match is None:
+            if lines[index].startswith("    --hash"):
+                _fail("wheelhouse lock hash is not a requirement continuation")
             _fail("wheelhouse lock contains an invalid requirement line")
-        if current is not None and not current_has_hash:
-            _fail("wheelhouse lock requirement has no attached hash")
         name = match.group("name")
         version = match.group("version")
-        if name not in PACKAGE_VERSIONS:
-            _fail("wheelhouse lock contains an unknown package")
+        if name != expected_name:
+            _fail("wheelhouse lock package order is invalid")
         if version != PACKAGE_VERSIONS[name]:
             _fail("wheelhouse lock contains an unsupported package version")
-        if name in seen:
-            _fail("wheelhouse lock contains a duplicate requirement")
-        seen.add(name)
-        current = name
-        result[current] = set()
-        current_has_hash = False
-        continuation_open = match.group("continuation") is not None
-    if current is not None and not current_has_hash:
-        _fail("wheelhouse lock requirement has no attached hash")
-    if continuation_open:
-        _fail('wheelhouse lock continuation is open at EOF')
+        index += 1
+        package_hashes: set[str] = set()
+        continuation_open = True
+        while continuation_open:
+            if index >= len(lines):
+                _fail("wheelhouse lock continuation is open at EOF")
+            hash_match = HASH_OPTION_RE.fullmatch(lines[index])
+            if hash_match is None:
+                _fail("wheelhouse lock continuation requires a hash line")
+            digest = hash_match.group("hash")
+            if digest in package_hashes:
+                _fail("wheelhouse lock contains a duplicate hash")
+            package_hashes.add(digest)
+            continuation_open = hash_match.group("continuation") is not None
+            index += 1
+        if not package_hashes:
+            _fail("wheelhouse lock requirement has no attached hash")
+        result[name] = package_hashes
+    if index != len(lines):
+        _fail("wheelhouse lock contains an unexpected trailing line")
     return result
 
 
-def _validate_lock(path: Path, artifacts: list[dict[str, Any]]) -> None:
+def _validate_lock(path: Path, expected_hashes: dict[str, set[str]]) -> None:
     hashes = _lock_hashes(path)
-    if set(hashes) != set(PACKAGE_NAMES):
+    if set(hashes) != set(PACKAGE_NAMES) or set(expected_hashes) != set(PACKAGE_NAMES):
         _fail("wheelhouse lock and manifest package sets disagree")
-    for artifact in artifacts:
-        if artifact["sha256"] not in hashes[artifact["name"]]:
-            _fail("wheelhouse lock is missing a manifest artifact hash")
+    for name in PACKAGE_NAMES:
+        if hashes[name] != expected_hashes[name]:
+            _fail("wheelhouse lock hashes disagree with the complete manifest")
 
 
-def _validate_artifact_records(artifacts: Any) -> list[dict[str, Any]]:
+def _artifact_signature(record: dict[str, Any]) -> tuple[tuple[str, Any], ...]:
+    return tuple((key, record[key]) for key in sorted(record))
+
+
+def _validate_artifact_records(
+    artifacts: Any, platform_key: str | None = None
+) -> list[dict[str, Any]]:
+    contract_error = "wheelhouse manifest artifact does not match approved platform contract"
     if not isinstance(artifacts, list) or len(artifacts) != len(PACKAGE_NAMES):
-        _fail("platform manifest artifact set is invalid")
+        _fail(contract_error)
     required = {"name", "version", "filename", "size", "sha256", "python_tag", "abi_tag", "platform_tag"}
     records: list[dict[str, Any]] = []
     for item in artifacts:
         if not isinstance(item, dict) or set(item) != required:
-            _fail("platform manifest artifact record is invalid")
+            _fail(contract_error)
         if not isinstance(item["name"], str) or not isinstance(item["version"], str) or not isinstance(item["filename"], str):
-            _fail("platform manifest artifact identity is invalid")
+            _fail(contract_error)
         if item["version"] != PACKAGE_VERSIONS.get(item["name"]) or not item["filename"].startswith(f"{item['name']}-{item['version']}-"):
-            _fail("platform manifest artifact version or filename is invalid")
+            _fail(contract_error)
         if type(item["size"]) is not int or item["size"] <= 0 or not isinstance(item["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"], re.ASCII):
-            _fail("platform manifest artifact digest metadata is invalid")
+            _fail(contract_error)
         if any(not isinstance(item[tag], str) or not item[tag] for tag in ("python_tag", "abi_tag", "platform_tag")):
-            _fail("platform manifest wheel tag metadata is invalid")
+            _fail(contract_error)
         records.append(item)
     if {item["name"] for item in records} != set(PACKAGE_NAMES):
-        _fail("platform manifest package set is invalid")
+        _fail(contract_error)
+    if platform_key is not None:
+        expected = APPROVED_PLATFORM_ARTIFACTS.get(platform_key)
+        if expected is None or tuple(_artifact_signature(item) for item in records) != tuple(
+            _artifact_signature(item) for item in expected
+        ):
+            _fail(contract_error)
     return records
 
 
@@ -226,12 +262,22 @@ def main(argv: list[str] | None = None) -> int:
     platforms = manifest.get("platforms")
     if not isinstance(platforms, dict) or set(platforms) != {"windows-py311", "macos-15-intel-py311-x86_64", "linux-py311"} or manifest_key not in platforms:
         _fail("unknown platform manifest key")
-    selected = platforms[manifest_key]
-    artifacts = _validate_artifact_records(selected.get("artifacts") if isinstance(selected, dict) else None)
+    records_by_platform: dict[str, list[dict[str, Any]]] = {}
+    complete_hashes = {name: set() for name in PACKAGE_NAMES}
+    for platform_key in ("windows-py311", "macos-15-intel-py311-x86_64", "linux-py311"):
+        platform_record = platforms[platform_key]
+        records = _validate_artifact_records(
+            platform_record.get("artifacts") if isinstance(platform_record, dict) else None,
+            platform_key,
+        )
+        records_by_platform[platform_key] = records
+        for record in records:
+            complete_hashes[record["name"]].add(record["sha256"])
+    artifacts = records_by_platform[manifest_key]
     if root.exists() and any(root.iterdir()):
         _fail("wheelhouse root is not empty; cache reuse is forbidden")
     root.mkdir(parents=True, exist_ok=True)
-    _validate_lock(Path(args.lock).resolve(), artifacts)
+    _validate_lock(Path(args.lock).resolve(), complete_hashes)
     index = os.environ.get("TORQ_T06C_OFFICIAL_INDEX", manifest.get("official_index"))
     if index != "https://pypi.org/simple":
         _fail("only the configured official PyPI index is permitted")

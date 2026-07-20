@@ -112,6 +112,18 @@ class ConsoleSchemaError(ValueError):
     """The constructed document violates the closed source schema."""
 
 
+def _decode_console_utf8(raw: bytes) -> str:
+    if len(raw) > MAX_BYTES or raw.startswith(b"\xef\xbb\xbf"):
+        raise ConsoleSyntaxError()
+    try:
+        text = raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise ConsoleSyntaxError() from exc
+    if text.startswith("\ufeff"):
+        raise ConsoleSyntaxError()
+    return text
+
+
 def _path_for(key: str) -> str:
     return "/" + key.replace("~", "~0").replace("/", "~1")
 
@@ -169,11 +181,10 @@ def _node_walk(node: Any, path: str = "", level: int = 0) -> None:
 
 def preflight_console_yaml(raw: bytes) -> None:
     """Reject unsafe YAML constructs before any Python value is constructed."""
-    if len(raw) > MAX_BYTES or raw.startswith(b"\xef\xbb\xbf"):
-        raise ConsoleSyntaxError()
+    text = _decode_console_utf8(raw)
     count = 0
     try:
-        for event in yaml.parse(raw, Loader=yaml.SafeLoader):
+        for event in yaml.parse(text, Loader=yaml.SafeLoader):
             if not isinstance(event, (events.StreamStartEvent, events.StreamEndEvent)):
                 count += 1
             if count > MAX_EVENTS:
@@ -182,7 +193,7 @@ def preflight_console_yaml(raw: bytes) -> None:
                 raise ConsoleSyntaxError()
             if getattr(event, "tag", None) is not None:
                 raise ConsoleSyntaxError()
-        documents = list(yaml.compose_all(raw, Loader=yaml.SafeLoader))
+        documents = list(yaml.compose_all(text, Loader=yaml.SafeLoader))
     except ConsoleSyntaxError:
         raise
     except (UnicodeDecodeError, yaml.YAMLError, ValueError) as exc:
@@ -194,8 +205,9 @@ def preflight_console_yaml(raw: bytes) -> None:
 
 def construct_console_yaml(raw: bytes) -> Mapping[str, Any]:
     """Construct only after ``preflight_console_yaml`` has completed."""
+    text = _decode_console_utf8(raw)
     try:
-        loader = yaml.SafeLoader(raw)
+        loader = yaml.SafeLoader(text)
         try:
             document = loader.get_single_data()
         finally:

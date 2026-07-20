@@ -21,6 +21,14 @@ PLATFORM_KEYS = {
     "macos-py311": "macos-15-intel-py311-x86_64",
     "linux-py311": "linux-py311",
 }
+MANIFEST_ROOT_KEYS = frozenset({"schema", "official_index", "python", "platforms"})
+PYTHON_KEYS = frozenset({"implementation", "major", "minor"})
+PLATFORM_RECORD_KEYS = frozenset({"runner", "sys_platform", "machine", "artifacts"})
+PLATFORM_METADATA = {
+    "windows-py311": ("windows-2022", "win32", "AMD64"),
+    "macos-15-intel-py311-x86_64": ("macos-15-intel", "darwin", "x86_64"),
+    "linux-py311": ("ubuntu-22.04", "linux", "x86_64"),
+}
 PACKAGE_NAMES = ("PyYAML", "setuptools", "wheel", "packaging")
 PACKAGE_VERSIONS = {"PyYAML": "6.0.2", "setuptools": "82.0.1", "wheel": "0.47.0", "packaging": "26.0"}
 APPROVED_PLATFORM_ARTIFACTS: dict[str, tuple[dict[str, Any], ...]] = {
@@ -108,14 +116,57 @@ def _wheel_tags(filename: str) -> tuple[str, str, str]:
     return parts[1], parts[2], parts[3]
 
 
+def _reject_duplicate_json_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            _fail("wheelhouse manifest contains a duplicate JSON object member")
+        result[key] = value
+    return result
+
+
+def _validate_manifest_wrapper(value: dict[str, Any]) -> None:
+    if set(value) != MANIFEST_ROOT_KEYS:
+        _fail("wheelhouse manifest wrapper is not closed")
+    if not isinstance(value["schema"], str) or value["schema"] != "torq-t06c-wheelhouse-v1":
+        _fail("wheelhouse manifest schema is invalid")
+    if not isinstance(value["official_index"], str) or value["official_index"] != "https://pypi.org/simple":
+        _fail("wheelhouse manifest official index is invalid")
+
+    python_metadata = value["python"]
+    if not isinstance(python_metadata, dict) or set(python_metadata) != PYTHON_KEYS:
+        _fail("wheelhouse manifest Python wrapper is invalid")
+    if python_metadata["implementation"] != "cpython":
+        _fail("wheelhouse manifest Python implementation is invalid")
+    if type(python_metadata["major"]) is not int or python_metadata["major"] != 3:
+        _fail("wheelhouse manifest Python major version is invalid")
+    if type(python_metadata["minor"]) is not int or python_metadata["minor"] != 11:
+        _fail("wheelhouse manifest Python minor version is invalid")
+
+    platforms = value["platforms"]
+    if not isinstance(platforms, dict) or set(platforms) != set(PLATFORM_METADATA):
+        _fail("wheelhouse manifest platform membership is invalid")
+    for platform_key, metadata in PLATFORM_METADATA.items():
+        record = platforms[platform_key]
+        if not isinstance(record, dict) or set(record) != PLATFORM_RECORD_KEYS:
+            _fail("wheelhouse manifest platform wrapper is invalid")
+        if tuple(record[key] for key in ("runner", "sys_platform", "machine")) != metadata:
+            _fail("wheelhouse manifest platform metadata is invalid")
+        if not isinstance(record["artifacts"], list):
+            _fail("wheelhouse manifest artifacts member is invalid")
+
+
 def _load_manifest(path: Path) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(
+            path.read_text(encoding="utf-8"), object_pairs_hook=_reject_duplicate_json_members
+        )
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         _fail("wheelhouse manifest cannot be read")
         raise AssertionError from exc
-    if not isinstance(value, dict) or value.get("schema") != "torq-t06c-wheelhouse-v1":
-        _fail("wheelhouse manifest schema is invalid")
+    if not isinstance(value, dict):
+        _fail("wheelhouse manifest wrapper is invalid")
+    _validate_manifest_wrapper(value)
     return value
 
 
@@ -266,21 +317,18 @@ def main(argv: list[str] | None = None) -> int:
     complete_hashes = {name: set() for name in PACKAGE_NAMES}
     for platform_key in ("windows-py311", "macos-15-intel-py311-x86_64", "linux-py311"):
         platform_record = platforms[platform_key]
-        records = _validate_artifact_records(
-            platform_record.get("artifacts") if isinstance(platform_record, dict) else None,
-            platform_key,
-        )
+        records = _validate_artifact_records(platform_record["artifacts"], platform_key)
         records_by_platform[platform_key] = records
         for record in records:
             complete_hashes[record["name"]].add(record["sha256"])
     artifacts = records_by_platform[manifest_key]
+    _validate_lock(Path(args.lock).resolve(), complete_hashes)
+    index = os.environ.get("TORQ_T06C_OFFICIAL_INDEX", manifest["official_index"])
+    if index != "https://pypi.org/simple":
+        _fail("only the configured official PyPI index is permitted")
     if root.exists() and any(root.iterdir()):
         _fail("wheelhouse root is not empty; cache reuse is forbidden")
     root.mkdir(parents=True, exist_ok=True)
-    _validate_lock(Path(args.lock).resolve(), complete_hashes)
-    index = os.environ.get("TORQ_T06C_OFFICIAL_INDEX", manifest.get("official_index"))
-    if index != "https://pypi.org/simple":
-        _fail("only the configured official PyPI index is permitted")
     environment = os.environ.copy()
     environment.update({"PIP_NO_CACHE_DIR": "1", "PIP_DISABLE_PIP_VERSION_CHECK": "1", "PIP_NO_INPUT": "1"})
     command = [

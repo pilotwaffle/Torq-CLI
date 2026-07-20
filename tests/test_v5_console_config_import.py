@@ -552,6 +552,140 @@ def test_complete_manifest_validates_all_platform_records() -> None:
         assert len(_validate_artifact_records(platform_record["artifacts"])) == len(PACKAGE_NAMES)
 
 
+@pytest.mark.parametrize(
+    "label",
+    (
+        "missing-root-key",
+        "extra-root-key",
+        "wrong-root-type",
+        "wrong-schema-literal",
+        "wrong-index-literal",
+        "missing-python-key",
+        "extra-python-key",
+        "wrong-python-type",
+        "wrong-implementation",
+        "wrong-major",
+        "boolean-major",
+        "wrong-minor",
+        "missing-platform-key",
+        "extra-platform-key",
+        "missing-platform-member",
+        "extra-platform-member",
+        "wrong-runner",
+        "wrong-sys-platform",
+        "wrong-machine",
+    ),
+)
+def test_W2_closed_manifest_wrapper_mutations_stop_before_download(
+    monkeypatch, tmp_path: Path, label: str
+) -> None:
+    import scripts.provision_ci_wheelhouse as provisioner
+
+    manifest = _load_manifest(MANIFEST)
+    platforms = manifest["platforms"]
+    assert isinstance(platforms, dict)
+    if label == "missing-root-key":
+        del manifest["schema"]
+    elif label == "extra-root-key":
+        manifest["unexpected"] = "wrapper-marker"
+    elif label == "wrong-root-type":
+        manifest["platforms"] = []
+    elif label == "wrong-schema-literal":
+        manifest["schema"] = "wrong-schema"
+    elif label == "wrong-index-literal":
+        manifest["official_index"] = "https://example.invalid/simple"
+    elif label == "missing-python-key":
+        del manifest["python"]["minor"]
+    elif label == "extra-python-key":
+        manifest["python"]["unexpected"] = 11
+    elif label == "wrong-python-type":
+        manifest["python"] = "cpython-3.11"
+    elif label == "wrong-implementation":
+        manifest["python"]["implementation"] = "pypy"
+    elif label == "wrong-major":
+        manifest["python"]["major"] = 4
+    elif label == "boolean-major":
+        manifest["python"]["major"] = True
+    elif label == "wrong-minor":
+        manifest["python"]["minor"] = 10
+    elif label == "missing-platform-key":
+        del platforms["linux-py311"]
+    elif label == "extra-platform-key":
+        platforms["unknown-py311"] = copy.deepcopy(platforms["linux-py311"])
+    elif label == "missing-platform-member":
+        del platforms["linux-py311"]["runner"]
+    elif label == "extra-platform-member":
+        platforms["linux-py311"]["unexpected"] = "wrapper-marker"
+    elif label == "wrong-runner":
+        platforms["linux-py311"]["runner"] = "other-runner"
+    elif label == "wrong-sys-platform":
+        platforms["linux-py311"]["sys_platform"] = "win32"
+    elif label == "wrong-machine":
+        platforms["linux-py311"]["machine"] = "aarch64"
+    else:
+        raise AssertionError(label)
+
+    manifest_path = tmp_path / f"{label}.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    root = tmp_path / f"{label}-root"
+    monkeypatch.setenv("TORQ_T06C_CI_TEMP_ROOT", str(tmp_path.parent))
+    monkeypatch.delenv("TORQ_T06C_OFFICIAL_INDEX", raising=False)
+    monkeypatch.setattr(provisioner, "_assert_runtime", lambda _: None)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        provisioner.subprocess,
+        "run",
+        lambda command, **kwargs: calls.append(command) or SimpleNamespace(returncode=0),
+    )
+
+    with pytest.raises(SystemExit):
+        provisioner.main([
+            "--root", str(root), "--platform", "linux-py311", "--lock", str(LOCK),
+            "--manifest", str(manifest_path),
+        ])
+    assert calls == []
+    assert not root.exists()
+
+
+@pytest.mark.parametrize("location", ("root", "python", "platform"))
+def test_W2_duplicate_manifest_members_stop_before_download(
+    monkeypatch, tmp_path: Path, location: str
+) -> None:
+    import scripts.provision_ci_wheelhouse as provisioner
+
+    payload = MANIFEST.read_text(encoding="utf-8")
+    if location == "root":
+        needle = '  "schema": "torq-t06c-wheelhouse-v1",\n'
+        duplicate = needle + '  "schema": "torq-t06c-wheelhouse-v1",\n'
+    elif location == "python":
+        needle = '    "implementation": "cpython",\n'
+        duplicate = needle + '    "implementation": "cpython",\n'
+    else:
+        needle = '      "runner": "windows-2022",\n'
+        duplicate = needle + '      "runner": "windows-2022",\n'
+    assert payload.count(needle) == 1
+    manifest_path = tmp_path / f"duplicate-{location}.json"
+    manifest_path.write_text(payload.replace(needle, duplicate, 1), encoding="utf-8")
+    root = tmp_path / f"duplicate-{location}-root"
+    monkeypatch.setenv("TORQ_T06C_CI_TEMP_ROOT", str(tmp_path.parent))
+    monkeypatch.delenv("TORQ_T06C_OFFICIAL_INDEX", raising=False)
+    monkeypatch.setattr(provisioner, "_assert_runtime", lambda _: None)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        provisioner.subprocess,
+        "run",
+        lambda command, **kwargs: calls.append(command) or SimpleNamespace(returncode=0),
+    )
+
+    with pytest.raises(SystemExit):
+        provisioner.main([
+            "--root", str(root), "--platform", "linux-py311", "--lock", str(LOCK),
+            "--manifest", str(manifest_path),
+        ])
+    assert calls == []
+    assert not root.exists()
+
+
 def test_wheelhouse_lock_rejects_extra_manifest_hash(tmp_path: Path) -> None:
     lines = LOCK.read_text(encoding="utf-8").splitlines()
     hash_indices = [index for index, line in enumerate(lines) if line.strip().startswith("--hash")]
@@ -1792,16 +1926,50 @@ SECRET_VALUE_CASES = (
     ("pem", "-----BEGIN PRIVATE KEY-----"),
     ("bearer", "Bearer abcdefgh"),
     ("basic", "Basic abcdefgh"),
-    ("token-prefix", "sk-test-1234567890123456"),
     ("akia", "AKIA1234567890ABCDEF"),
-    ("assignment", "Authorization: abcdefgh"),
-    ("cookie", "cookie=abcdefgh"),
     ("jwt-valid", "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature"),
-    ("signed-url", "https://example.com/path?signature=abcdefgh"),
-    ("signed-url-percent-name", "https://example.com/path?%73ignature=abcdefgh"),
-    ("signed-url-percent-value", "https://example.com/path?signature=%61bcdefgh"),
     ("malformed-authority", "https://example.com:bad/path?x=1"),
+    ("malformed-port-zero", "https://example.com:0/path?x=1"),
+    ("malformed-port-range", "https://example.com:65536/path?x=1"),
+    ("malformed-bracket-authority", "https://[::1]/path?x=1"),
+    ("malformed-userinfo-authority", "https://user@example.com/path?x=1"),
+    ("malformed-host", "https://-example.com/path?x=1"),
     ("malformed-query", "https://example.com/path?&x=1"),
+    ("malformed-query-empty-component", "https://example.com/path?x=1&&signature=abcdefgh"),
+    ("malformed-query-percent", "https://example.com/path?signature=%ZZ"),
+    ("malformed-query-no-equals", "https://example.com/path?signature&x=1&signature=abcdefgh"),
+)
+
+SECRET_VALUE_CASES += tuple(
+    (f"token-prefix-{prefix}", f"{prefix}abcdefgh12345678")
+    for prefix in ("sk-", "sk_", "rk_", "ghp_", "github_pat_")
+)
+SECRET_VALUE_CASES += tuple(
+    (f"assignment-{label}-{delimiter}", f"{label}{delimiter}abcdefgh")
+    for label in ("authorization", "proxy-authorization", "cookie", "set-cookie")
+    for delimiter in (":", "=")
+)
+
+
+def _percent_encode_ascii(value: str) -> str:
+    return "".join(f"%{ord(character):02x}" for character in value)
+
+
+SIGNED_QUERY_NAMES = (
+    "signature", "sig", "x_amz_signature", "x_goog_signature",
+    "token", "access_token", "api_key", "x_api_key",
+)
+SECRET_VALUE_CASES += tuple(
+    (f"signed-url-{name}", f"https://example.com/path?{name}=abcdefgh")
+    for name in SIGNED_QUERY_NAMES
+)
+SECRET_VALUE_CASES += tuple(
+    (f"signed-url-encoded-name-{name}", f"https://example.com/path?{_percent_encode_ascii(name)}=abcdefgh")
+    for name in SIGNED_QUERY_NAMES
+)
+SECRET_VALUE_CASES += tuple(
+    (f"signed-url-encoded-value-{name}", f"https://example.com/path?{name}=%61bcdefgh")
+    for name in SIGNED_QUERY_NAMES
 )
 
 
@@ -1810,10 +1978,19 @@ def test_X1_secret_value_detector_matrix_is_ordered_and_source_free(label: str, 
     assert console_domain.contains_console_secret({"note": value})
     document = _valid_console_document()
     document["secret-marker"] = value
-    path = tmp_path / f"x1-{label}.yaml"
+    path = tmp_path / f"x1-{label.replace(':', '_')}.yaml"
     path.write_bytes(_dump_console_document(document))
+    result = _run_source_console(path)
     _assert_matrix_process_failure(
-        _run_source_console(path), "console_config_secret_field_forbidden", "console_config_validate", value
+        result, "console_config_secret_field_forbidden", "console_config_validate", value
+    )
+    output = result.stdout.decode("utf-8") + result.stderr.decode("utf-8")
+    assert all(
+        marker not in output
+        for marker in (
+            "secret-marker", value, str(path), path.name,
+            "ProtectedPathError", "LegacyConfigUnreadable", "LegacyConfigTooLarge",
+        )
     )
 
 
@@ -1821,7 +1998,8 @@ def test_X1_secret_value_detector_matrix_is_ordered_and_source_free(label: str, 
     "value",
     (
         "Bearer", "sk-short", "aaaaaaa.bbbbbbb.ccccccc", "https://example.com/path?signature",
-        "https://example.com/path?%2573ignature=abcdefgh", "https://example.com/path?x=1", "plain harmless metadata",
+        "https://example.com/path?%2573ignature=abcdefgh", "https://example.com/path?x=1",
+        "https://example.com/path?x&y=1", "plain harmless metadata",
     ),
 )
 def test_X1_valid_nonsecret_near_misses_remain_valid(value: str) -> None:
@@ -2065,20 +2243,44 @@ def test_R2_all_oracle_failure_ids_keep_blocked_source_free_envelope(
     assert result["data"] == {}
 
 
+T06C_APPLICATION_MATRIX = (
+    ("application-unreadable", LegacyConfigUnreadable(), "console_config_unreadable", "console_config_read", 2, "/console_config"),
+    ("application-too-large", LegacyConfigTooLarge(), "console_config_syntax_invalid", "console_config_parse", 2, "/"),
+    ("application-protected", ProtectedPathError(), "console_config_protected_path_denied", "console_config_read", 3, "/console_config"),
+    ("application-reparse", ProtectedPathError(), "console_config_protected_path_denied", "console_config_read", 3, "/console_config"),
+    ("application-hardlink-translation", ProtectedPathError(), "console_config_protected_path_denied", "console_config_read", 3, "/console_config"),
+    ("application-nonregular-translation", ProtectedPathError(), "console_config_protected_path_denied", "console_config_read", 3, "/console_config"),
+    ("application-identity-translation", ProtectedPathError(), "console_config_protected_path_denied", "console_config_read", 3, "/console_config"),
+    ("application-safety-primitive-translation", ProtectedPathError(), "console_config_protected_path_denied", "console_config_read", 3, "/console_config"),
+)
+T06C_PROTECTED_APPLICATION_ROWS = frozenset(
+    {
+        "application-protected",
+        "application-reparse",
+        "application-hardlink-translation",
+        "application-nonregular-translation",
+        "application-identity-translation",
+        "application-safety-primitive-translation",
+    }
+)
+
+
+def test_H1_application_matrix_names_every_protected_outcome() -> None:
+    protected_rows = {
+        label
+        for label, _exception, expected_id, _stage, _code, _path in T06C_APPLICATION_MATRIX
+        if expected_id == "console_config_protected_path_denied"
+    }
+    assert protected_rows == T06C_PROTECTED_APPLICATION_ROWS
+
+
 @pytest.mark.parametrize(
-    ("label", "exception"),
-    (
-        ("application-unreadable", LegacyConfigUnreadable()),
-        ("application-too-large", LegacyConfigTooLarge()),
-        ("application-protected", ProtectedPathError()),
-        ("application-hardlink-translation", LegacyConfigUnreadable()),
-        ("application-nonregular-translation", LegacyConfigUnreadable()),
-        ("application-identity-translation", LegacyConfigUnreadable()),
-        ("application-safety-primitive-translation", LegacyConfigUnreadable()),
-    ),
+    ("label", "exception", "expected_id", "expected_stage", "expected_code", "expected_path"),
+    T06C_APPLICATION_MATRIX,
 )
 def test_H1_application_boundary_translation_is_single_read_and_exact(
-    monkeypatch, capsys, label: str, exception: Exception
+    monkeypatch, capsys, label: str, exception: Exception, expected_id: str,
+    expected_stage: str, expected_code: int, expected_path: str,
 ) -> None:
     calls: list[str] = []
 
@@ -2088,19 +2290,20 @@ def test_H1_application_boundary_translation_is_single_read_and_exact(
 
     monkeypatch.setattr(console_app, "read_bounded_legacy_config", fail)
     code, result, stderr = _run(capsys, FIXTURE)
-    expected_id = "console_config_protected_path_denied" if label == "application-protected" else (
-        "console_config_syntax_invalid" if label == "application-too-large" else "console_config_unreadable"
-    )
-    expected_stage = "console_config_read" if expected_id.endswith("denied") or expected_id.endswith("unreadable") else "console_config_parse"
-    expected_code = 3 if expected_id.endswith("denied") else 2
     assert code == expected_code and stderr == ""
+    assert result["status"] == ("blocked" if expected_code == 3 else "invalid")
     assert result["findings"][0]["id"] == expected_id
     assert result["findings"][0]["stage"] == expected_stage
-    assert result["findings"][0]["path"] == ("/console_config" if expected_stage == "console_config_read" else "/")
+    assert result["findings"][0]["path"] == expected_path
+    assert result["findings"][0]["context"] == {}
+    assert result["findings"][0]["status_class"] == ("blocked" if expected_code == 3 else "invalid")
+    assert result["findings"][0]["bucket"] == ("A" if expected_code == 3 else "B")
+    assert result["findings"][0]["severity"] == ("critical" if expected_code == 3 else "high")
     assert result["data"] == {}
     assert result["snapshot"]["registry_id"] is not None
     assert result["snapshot"]["config_path"] is None
     assert result["snapshot"]["profile_id"] is None
+    assert result["snapshot"]["resolution_stage"] == expected_stage
     assert len(calls) == 1
     assert label
 

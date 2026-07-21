@@ -1,12 +1,12 @@
 # TORQ CLI Memory - Foundation Slice
 
-Last updated: 2026-07-18
+Last updated: 2026-07-21
 
 ## Status Taxonomy
 
 - Foundation Slice: Completed and verified.
-- Completed PRD tasks recorded in this memory: T-01 Foundation Slice and T-04 credential-storage requirements documentation only.
-- Later PRD tasks and phases: Proposed or Operator-gated only, not completed.
+- Completed PRD tasks recorded in this memory: T-01 Foundation Slice, T-02 audit-only extraction viability/mechanical oracle record, and T-04 credential-storage requirements documentation. T-06A, T-06B, and T-06C are also recorded below as completed and verified bounded slices.
+- Later PRD tasks and phases: T-03, T-05, T-07 onward, unfinished T-06 aggregate work, Phase 1, and the full PRD remain proposed, incomplete, or operator-gated unless separately recorded elsewhere by the operator.
 - Operator-controlled actions remain unperformed unless separately recorded elsewhere by the operator.
 
 ## Objective
@@ -85,7 +85,7 @@ Luna made a procedural scope deviation: `tests/test_findings.py` was outside the
 - Native POSIX/macOS/Linux execution was not performed.
 - External four-job CI execution and branch protection are not attested.
 - Provider/runtime credentials, grants, routing effectiveness, live prompt/model/session behavior, and provider execution are unattested.
-- Credential backend, sandbox, receipts, persistence, primary apply, deployment/release, T-02, and later PRD work remain unimplemented or operator-gated.
+- Credential backend, sandbox, receipts, persistence, primary apply, deployment/release, T-03, T-05, T-07 onward, and later PRD work remain unimplemented or operator-gated. The earlier statement that T-02 remained unimplemented is superseded by the Post-G2A T-02 Memory Update below.
 - Static fixture refresh remains operator-gated.
 
 ## Remaining Operator Actions
@@ -228,3 +228,50 @@ Approved invariant and implemented boundary: only explicitly supplied sanitized 
 Residuals and known limitations: provenance remains operator-attested rather than cryptographically bound to the protected original; compatibility is intentionally limited to the pinned Console V5 grammar; source orchestration metadata is deliberately discarded; secret detection is limited to enumerated classes and conservatively rejects malformed HTTP(S) candidates; hosted runner images, actions, and permitted bootstrap are externally maintained; sanitized fixtures remain in tests but are excluded from wheel and sdist artifacts; local verification ran on CPython 3.13 while hosted CI provides the required CPython 3.11 proof.
 
 Remaining operator actions: review, undraft, and merge PR #1 if appropriate; release, deploy, tag, and branch-protection actions; provider, credential, and billing configuration; and any broader T06, Phase 1, PRD, or later-slice authority.
+
+## Post-G2A T-02 Memory Update
+
+T-02 status: Completed and verified. This records T-02 only; it does not mark the full PRD, Phase 1, T-03, T-05, T-07 onward, unfinished T-06 aggregate work, or any other unfinished work complete. Earlier memory statements that described T-02 as unimplemented are superseded by this section. Historical V15P rejection and correction cycles remain preserved as history.
+
+Session-scoped OpenAI-only routing was actually used for the T-02 gate/build/verify/audit sequence. It does not replace canonical global role configuration or create a broader product-routing claim.
+
+Actual role threads and verdicts:
+
+- Terra G1D/orchestrator: GPT-5.6 Terra High, thread `019f7fa6-8ffb-7e72-b148-ecb72b0a687a`.
+- Sol G1R: GPT-5.6 Sol High, isolated thread `019f7fab-c850-7730-b3ba-f80997b5e45f`, verdict `APPROVE`.
+- Luna Builder: GPT-5.6 Luna High, thread `019f7fb6-bd97-7642-91c6-4448ac0c5815`.
+- Independent verifier: GPT-5.5, fresh thread `019f8600-ca2e-70c1-a811-d5429dfbd07e`, recommendation `READY_FOR_G2A`.
+- Final G2A: GPT-5.6 Sol High, fresh isolated thread `019f8616-7708-7f12-8524-0e5975183102`, verdict `APPROVE`.
+- Memory Writer: fresh GPT-5.5 Memory Writer thread; this stage records post-approval state only and does not self-approve implementation.
+
+Controlling Gate 1 invariant and approved architecture: T-02 conclusions derive only from hash-verified governed packets, pinned Console commit/tree and governed Git objects, the byte-authoritative V15 oracle, the exact approved source postimages, and controlled external evidence. The approved implementation is audit-only and pinned to Console-object/static audit boundaries; it includes hermetic fake resume proof, SQLite canonical journal/authority/rollback invariants, cache-disabled exact-one stage admission, and same-transaction prepared-copy parity before finalization. Guards, copies, cached statements, affinity-converted values, or reopen observations do not mint authority.
+
+Controlling evidence packets read for this memory update:
+
+- Terra V15 Gate 1 `TERRA_T02_G1D_V15_GATE1_REPAIR.full.md`: 16,119 bytes / `136D8EA8B8D61EBA178B4355D8D7E726349968A64531E41A818689D9DB29D140`.
+- Sol G1R `SOL_T02_G1R_V15_REPORT.full.md`: 5,657 bytes / `1443681EE0730A76071C39C9EF6AE16B39F4DFA85C3785C96A38F1E1EF45C688`.
+- Terra final Gate 1/Luna packet `TERRA_T02_FINAL_GATE1_V15_LUNA_PACKET.full.md`: 7,700 bytes / `EB2EC99F2E695522BC401E4D1D696A2CBB7A9A77FD9B895FFEB240E1EE415D6D`.
+- Prior V15P G2A rejection `SOL_T02_G2A_V15P_FINAL_AUDIT.full.md`: 27,946 bytes / `D31A299CB0A7587DEF06A6E062DE054EBF7165EFA73DFA59AED4F2AFAC4AB822`; superseded for current state by V15Q correction, verification, and final approval.
+- Terra V15Q correction `TERRA_T02_V15Q_BOUNDED_CORRECTION.full.md`: 21,720 bytes / `95EF407F9C0D66102EC8B30FF9D4F28D4AD35B931C8F04FDD6DA6A98175A54FB`.
+- Luna corrected Builder packet `LUNA_T02_V15Q_BUILDER_EVIDENCE_CORRECTED.full.md`: 11,671 bytes / `6A255DEE682FFE46D4B43C75408E0FCB3570BB9C3C32CB9B15A47500C0B3F029`.
+- Independent GPT-5.5 packet `GPT55_T02_V15Q_INDEPENDENT_VERIFICATION.full.md`: 18,165 bytes / `55DDF264BBF70674EE0ECCE1F9519A2ADA99865CB6516DB7DF6878DE5BFA4EFB`.
+- Final Sol G2A packet `SOL_T02_G2A_V15Q_FINAL_AUDIT.full.md`: 17,804 bytes / `536F265B8729FE562223889216B263BEDDBB3359AC0D2A8B9C8CE9DA8692F8B0`.
+
+Verified evidence:
+
+- Luna: full suite exactly 164 collected / 164 passed; controlling v06 ledger 28/28.
+- GPT-5.5 verifier: 33 focused V15Q passed; 164/164 full suite in 162.84s; 28/28 fresh two-CWD nodes; static/preflight/probe and adversarial evidence; recommendation `READY_FOR_G2A`.
+- Final Sol G2A: 33 focused V15Q passed in 22.22s; final 164/164 full suite in 163.95s; fresh static/preflight/probe; file-backed cache/admission harness; 12-case prepared-copy parity matrix; verdict `APPROVE`.
+
+Final approved source postimages are recorded as evidence only; this memory update does not claim these source hashes changed:
+
+- `docs/architecture/extraction-viability-audit-draft.md`: 7,420 bytes / `FB5DEF0237E721F8A35F07F99B79EE12AFFBE04E10FA9A562BA3C14308625495`.
+- `scripts/t02_audit_console_head.py`: 160,495 bytes / `327FCE25B6362FDA9425AF13BD13A18D514FE3D4099099327D60F119E43CF88F`.
+- `scripts/t02_mmh_resume_probe.py`: 33,834 bytes / `E0CAC2D46B2C282B016CE5805EB93665C1D3DC01DC98B31688ECECA7F285D89B`.
+- `tests/test_t02_audit_tools.py`: 130,263 bytes / `12D5EA0E18EBD257F7CA37A8DB13A32729DAD094D79ADAD46289F690282714E1`.
+
+HOME anomaly disposition: G2A explicitly judged the internal official `run-node` child environment's controlled HOME behavior as `NONBLOCKING_APPROVED_ISOLATION_BEHAVIOR`. The launcher did not set PowerShell `$HOME`, `$home`, or `$CODEX_HOME`; the internal child environment behavior was accepted as part of the hermetic isolation contract.
+
+Accepted residuals: no Console pytest; no real providers, network, credentials, or product runtime; no production crash-consistency claim; no historical SQLite compatibility proof; no hostile schema-owner, VFS, database-file replacement, or private-process/source-rewrite guarantee; no paths outside the approved four-file T-02 surface. Licensing/SBOM remains T-05/T-07 authority. Operator-gated residual paths were untouched.
+
+Git integration remains pending at memory-write time. No commit, branch, push, PR, merge, deployment, release, source-hash change, or product integration is invented by this record. The next integration step is an operator-authorized bounded commit/push if desired; merge, deploy, and release remain operator-controlled.

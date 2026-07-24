@@ -1,20 +1,15 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# TORQ CLI Foundation Slice
 
-# Run and deploy your AI Studio app
+TORQ CLI is a standalone Python 3.11+ command-line validator for immutable governance profiles and non-secret configuration.
 
-This contains everything you need to run your app locally.
+```text
+torq profile validate --config PATH
+torq status --offline --config PATH [--require-effective]
+torq config import-v5-normalized --config ABSOLUTE_PATH
+```
 
-View your app in AI Studio: https://ai.studio/apps/10609c05-e162-483a-9eca-c07af48bfa38
+The Foundation Slice reads only the explicitly supplied configuration and immutable packaged resources. It has no provider or agent invocation, credential resolution, environment discovery, network, subprocess, Git or `.git` access, persistence, telemetry, sandbox runtime, receipt handling, apply path, or repository mutation. A `credential_ref` is syntax-only and is never resolved or emitted.
 
-## Run Locally
+The T-06A import command reads only the authenticated normalized V5 fixture shape and emits a fixed registry-authoritative stdout projection. It does not read raw Console configuration, write files, resolve credentials, access providers, or claim T-06/Phase 1 completion.
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+`status --offline` is intentionally `offline_unattested`; `--require-effective` exits 4. Local quality commands are defined in `docs/architecture/foundation-task-status.md`. Passing local commands does not prove the four external CI jobs, branch protection, provider effectiveness, or release readiness.

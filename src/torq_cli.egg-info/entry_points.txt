@@ -1,0 +1,2 @@
+[console_scripts]
+torq = torq_cli.interfaces.cli:main
